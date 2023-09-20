@@ -2,49 +2,6 @@ source("global.R")
 
 #######################################################################################################################
 #######################################################################################################################
-############################################       FUNCTIONS       ####################################################
-#######################################################################################################################
-#######################################################################################################################
-
-# Sort file and tabix
-sort_and_tabix <- function(tail_f) {
-  bgzip <- file.path(HTSLIB_PATH,"bgzip")
-  tabix <- file.path(HTSLIB_PATH,"tabix")
-  
-  tail_f_sorted <- gsub(extension, ".sorted.csv", tail_f)
-  tail_f_gz <- paste0(tail_f_sorted, ".gz")
-  sort_cmd=paste0("{ head -n 1 ",tail_f, " && tail -n +2 ", tail_f, " | sort -k",AGI_col," -k",start_col,"n,",end_col,"n; } > ", tail_f_sorted)
-  tabix_cmd <- paste(bgzip, tail_f_sorted, "&&",  tabix, tail_f_gz, "-S 1 -s",AGI_col,"-b",start_col,"-e",end_col)
-  
-  system(sort_cmd)
-  system(tabix_cmd)
-}
-
-# Check if tabixed and tabix if not
-check_if_tabixed <- function(tabix_file,tail_file, index=".tbi") {
-  if (!file.exists(tail_file)) {
-    shinyalert("OUCH", paste("THERE IS NO", tail_file), type = "error")
-  }
-
-  if (!file.exists(tabix_file) | !file.exists(paste0(tabix_file, index))){
-    
-    show_modal_spinner(spin = "fingerprint", text=paste("indexing", basename(file.path(tabix_file)))) # show the modal window
-    sort_and_tabix(tail_file)
-    remove_modal_spinner() # remove it when done
-
-  } else {
-    shinyalert("Nice!", paste("successfully added", tabix_file), type = "success")
-  }
-}
-
-# Read only part of files containing users' AGI 
-read_tabixed_files <- function(file, AGI) {
-  dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, AGI, "-h")) 
-  return(dt)
-}
-
-#######################################################################################################################
-#######################################################################################################################
 ############################################       UI       ###########################################################
 #######################################################################################################################
 #######################################################################################################################
@@ -53,29 +10,34 @@ header= dashboardHeader(title = "RNAvis", dropdownMenuOutput("notificationMenu")
 sidebar <-   dashboardSidebar(
   sidebarMenu( 
     br(),
-    h4(HTML("1 | Select a FLEPseq folder")),
-    shinyDirButton("dir", 'Select a folder', 'Please select a run folder  (use the arrows)'),
+    h5(HTML("1 | Select a FLEPseq folder")),
+    shinyDirButton("dir", 'Select a folder', 'Please select a run folder  (use the arrows)',
+                   style="color: #fffc300; background-color: #e95420; border-color: #c34113;
+                                                         >border-radius: 10px; >border-width: 2px"),
     br(),
-    h4(HTML("2 | Enter an AGI")),
+    h5(HTML("2 | Enter an AGI")),
     textInput("AGI",value = "AT1G01010.1",label = NULL ), #textInput
     actionButton(inputId = "SubmitAGI",
                  label = "Get table",
                  style="color: #fffc300; background-color: #e95420; border-color: #c34113;
                                                          >border-radius: 10px; >border-width: 2px"),
     
-    h4(HTML("3 | Select usefull columns")),
+    h5(HTML("3 | Select usefull columns")),
     selectizeInput('column_sel','Select column',choices=NULL, selected=NULL, multiple=T),
     actionButton(inputId = "update",
-                 label = "Update columns"),
+                 label = "Update columns",
+                 style="color: #fffc300; background-color: #e95420; border-color: #c34113;
+                                                         >border-radius: 10px; >border-width: 2px"),
     
     br(),
-    h4(HTML("4 | Export Table")),
+    h5(HTML("4 | Export Table")),
     checkboxInput("save_selection", "Only save selected columns?", value = FALSE, width = NULL),
-    actionButton("save_df","Export Table")
+    actionButton("save_df","Export Table",
+                 style="color: #fffc300; background-color: #e95420; border-color: #c34113;
+                                                         >border-radius: 10px; >border-width: 2px")
     
   ) #sidebarMenu
 )
-
 
 body <- dashboardBody(
   tags$head(
@@ -150,6 +112,7 @@ server <- function(input, output, session) {
   
   # Mapping data
   MAP_data <- eventReactive(input$dir,{
+    req(global$barcode_corr)
     map_files <- global$barcode_corr$map_file
     names(map_files) <- global$barcode_corr$genotype
     mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "origin")
@@ -200,7 +163,8 @@ server <- function(input, output, session) {
   })
   
   output$coverage <- renderPlot({
-    req(AGI_data())
+    # req(AGI_data())
+    req(MAP_data())
     cov <- MAP_data() %>%
       group_by(origin, rname) %>%
       summarise(mean_cov=mean(coverage),
@@ -220,7 +184,8 @@ server <- function(input, output, session) {
   })
   
   output$mapq <- renderPlot({
-    req(AGI_data())
+    # req(AGI_data())
+    req(MAP_data())
     cov <- MAP_data() %>%
       group_by(origin, rname) %>%
       summarise(mean_cov=mean(coverage),
@@ -234,7 +199,6 @@ server <- function(input, output, session) {
   output$AGI_dt <- renderDataTable(filtereddata(), options = list(scrollX = TRUE))
   
   output$barcode_geno <- renderDataTable(
-    #req(AGI_data())
     global$barcode_corr,
     options = list(scrollX = TRUE)
     )

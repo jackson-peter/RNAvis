@@ -11,9 +11,9 @@ sidebar <-   dashboardSidebar(
   sidebarMenu( 
     br(),
     h5(HTML("1 | Select a FLEPseq folder")),
-    shinyDirButton("dir", 'Select a folder', 'Please select a run folder  (use the arrows)',
-                   style="color: #fffc300; background-color: #e95420; border-color: #c34113;
-                                                         >border-radius: 10px; >border-width: 2px"),
+    
+    selectInput("selectdir", 'Select File', c("Choose one" = "", list.files(datasets_path, recursive = F, full.names = T))),
+
     br(),
     h5(HTML("2 | Enter an AGI")),
     textInput("AGI",value = "AT1G01010.1",label = NULL ), #textInput
@@ -23,7 +23,7 @@ sidebar <-   dashboardSidebar(
                                                          >border-radius: 10px; >border-width: 2px"),
     
     h5(HTML("3 | Select usefull columns")),
-    selectizeInput('column_sel','Select column',choices=NULL, selected=NULL, multiple=T),
+    selectizeInput('column_sel', NULL,choices=NULL, selected=NULL, multiple=T),
     actionButton(inputId = "update",
                  label = "Update columns",
                  style="color: #fffc300; background-color: #e95420; border-color: #c34113;
@@ -56,13 +56,15 @@ body <- dashboardBody(
                ), 
                
       ), #tabPanel
-      tabPanel("Specific AGI",
-               h2(textOutput("AGI_name")),
-               fluidRow(dataTableOutput("AGI_dt"))
-      ) # tabPanel
+    tabPanel("Specific AGI",
+             h2(textOutput("AGI_name")),
+             fluidRow(uiOutput("AGI_dt_t"))
+             ), # tabPanel
     ), #tabsetPanel
+  ) # /dashboardbody
 
-) # /dashboardbody
+
+### UI construction
 
 ui <- dashboardPage(skin="green",
   header, 
@@ -78,25 +80,20 @@ ui <- dashboardPage(skin="green",
 
 server <- function(input, output, session) {
   
-  # Fait débuter le browser de fichiers dans le home.
-  shinyDirChoose(input, 'dir', roots = c(home = './data'))
-  
+
   global <- reactiveValues(datapath = getwd())
-  dir <- reactive(input$dir)
   output$dir <- renderText({global$datapath}) #output$dir
   
   # Met a jour le path du dossier choisi, associe les barcodes aux génotypes
   observeEvent(ignoreNULL = TRUE,
-               eventExpr = {input$dir},
+               eventExpr = {input$selectdir},
                handlerExpr = {
-                 if (!"path" %in% names(dir())) return()
-                 home <- normalizePath("./data")
-                 global$datapath <- file.path(home,
-                                              paste(unlist(dir()$path[-1]),
-                                                    collapse = .Platform$file.sep))
+                 global$datapath <- input$selectdir
+                 
                  tail_files <- list.files(path=file.path(global$datapath,tail_dir), pattern = paste0(tail_ext, "$"),full.names = T)
                  barcode_file <- file.path(global$datapath, sample_table)
                  mapping_files <- list.files(path=file.path(global$datapath,mapping_dir), pattern=paste0(mapping_ext, "$"), full.names=T)
+                 
                  
                  if (length(tail_files)>0) {
                    global$barcode_corr <- fread(barcode_file, col.names = c("barcode", "genotype"), header = F) %>%
@@ -110,9 +107,12 @@ server <- function(input, output, session) {
     }
   )
   
+
+  
   # Mapping data
-  MAP_data <- eventReactive(input$dir,{
+  MAP_data <- eventReactive(input$selectdir,{
     req(global$barcode_corr)
+    print(global$barcode_corr)
     map_files <- global$barcode_corr$map_file
     names(map_files) <- global$barcode_corr$genotype
     mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "origin")
@@ -120,19 +120,28 @@ server <- function(input, output, session) {
   
   # AGI_data is the data table of the AGI
   AGI_data <- eventReactive(input$SubmitAGI,{
-    req(input$dir, input$AGI)
+    req(input$selectdir, input$AGI)
     column_names <- names(fread(cmd = paste('head -n 1', global$barcode_corr$tail_file[1])))
     column_names <- c('origin', column_names)
     tabixed_list <- global$barcode_corr$tabix_file
     names(tabixed_list) <- global$barcode_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
     AGI_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files, AGI=input$AGI), idcol = "origin")
-    colnames(AGI_DF) <- column_names
-    AGI_DF <- AGI_DF %>% mutate(Run=basename(global$datapath))
-    #print(head(AGI_DF))
-    updateSelectizeInput(session, "column_sel", choices=colnames(AGI_DF))
-
+    tryCatch(
+      expr = {
+        
+        colnames(AGI_DF) <- column_names
+        AGI_DF <- AGI_DF %>% mutate(Run=basename(global$datapath))
+        #print(head(AGI_DF))
+        updateSelectizeInput(session, "column_sel", choices=colnames(AGI_DF))
+      },
+      error = function(e){ 
+        shinyalert("Erf!", "It seems that there's no data in the files chosen for the requested AGI", type = "warning")
+      }
+    )
+    
     return(AGI_DF)
+
   })
   
   filtereddata <- eventReactive({
@@ -153,8 +162,9 @@ server <- function(input, output, session) {
   })
 
   output$run_name <- renderText({
-    req(AGI_data())
-    title <- unique(AGI_data()$Run)
+    #req(AGI_data())
+    req(MAP_data())
+    title <- basename(global$datapath)
   })
   
   output$AGI_name <- renderText({
@@ -195,6 +205,16 @@ server <- function(input, output, session) {
       ggtitle("Mean mapping quality")+
       theme(legend.position = "none")
   })
+  
+  output$AGI_dt_t <- renderTable({
+    dt_render <- filtereddata()
+    validate(
+      need(nrow(dt_render) > 0, "No Data to show. Please check you provided a valid AGI.")
+
+    )
+    dt_render
+  })
+  
 
   output$AGI_dt <- renderDataTable(filtereddata(), options = list(scrollX = TRUE))
   

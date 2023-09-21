@@ -12,7 +12,7 @@ sidebar <-   dashboardSidebar(
     br(),
     h5(HTML("1 | Select a FLEPseq folder")),
     
-    selectInput("selectdir", 'Select File', c("Choose one" = "", list.files(datasets_path, recursive = F, full.names = T))),
+    selectInput("selectdir", 'Select File', c("Choose one" = "", flep_runs)),
 
     br(),
     h5(HTML("2 | Enter an AGI")),
@@ -107,12 +107,10 @@ server <- function(input, output, session) {
     }
   )
   
-
-  
   # Mapping data
   MAP_data <- eventReactive(input$selectdir,{
     req(global$barcode_corr)
-    print(global$barcode_corr)
+    
     map_files <- global$barcode_corr$map_file
     names(map_files) <- global$barcode_corr$genotype
     mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "origin")
@@ -132,7 +130,6 @@ server <- function(input, output, session) {
         
         colnames(AGI_DF) <- column_names
         AGI_DF <- AGI_DF %>% mutate(Run=basename(global$datapath))
-        #print(head(AGI_DF))
         updateSelectizeInput(session, "column_sel", choices=colnames(AGI_DF))
       },
       error = function(e){ 
@@ -141,7 +138,6 @@ server <- function(input, output, session) {
     )
     
     return(AGI_DF)
-
   })
   
   filtereddata <- eventReactive({
@@ -152,10 +148,21 @@ server <- function(input, output, session) {
     if (is.null(input$column_sel) || input$column_sel == "") {
       AGI_data()
     } else {
-      print(input$column_sel)
+      
       AGI_data()[ ,colnames(AGI_data()) %in% input$column_sel, with=FALSE]
     } 
   })
+  
+  
+  output$AGI_dt_t <- renderTable({
+    dt_render <- filtereddata()
+    validate(
+      need(nrow(dt_render) > 0, "No Data to show. Please check you provided a valid AGI.")
+    )
+    dt_render
+  })
+
+  
   
   observeEvent(AGI_data(), {
     updateSelectInput(session, "select", choices=colnames(AGI_data()))
@@ -206,15 +213,7 @@ server <- function(input, output, session) {
       theme(legend.position = "none")
   })
   
-  output$AGI_dt_t <- renderTable({
-    dt_render <- filtereddata()
-    validate(
-      need(nrow(dt_render) > 0, "No Data to show. Please check you provided a valid AGI.")
 
-    )
-    dt_render
-  })
-  
 
   output$AGI_dt <- renderDataTable(filtereddata(), options = list(scrollX = TRUE))
   
@@ -286,4 +285,9 @@ server <- function(input, output, session) {
   
 } #server
 
+#######################################################################################################################
+#######################################################################################################################
+#########################################       App calling       #####################################################
+#######################################################################################################################
+#######################################################################################################################
 shinyApp(ui, server)

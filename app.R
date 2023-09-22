@@ -32,10 +32,10 @@ sidebar <-   dashboardSidebar(
     br(),
     h5(HTML("4 | Export Table")),
     checkboxInput("save_selection", "Only save selected columns?", value = FALSE, width = NULL),
-    actionButton("save_df","Export Table",
-                 style="color: #fffc300; background-color: #e95420; border-color: #c34113;
-                                                         >border-radius: 10px; >border-width: 2px")
-    
+    downloadButton("downloadData", "Download")
+    #actionButton("save_df","Export Table",
+    #             style="color: #fffc300; background-color: #e95420; border-color: #c34113;
+    #                                                    >border-radius: 10px; >border-width: 2px")
   ) #sidebarMenu
 )
 
@@ -77,10 +77,8 @@ ui <- dashboardPage(skin="green",
 ############################################       SERVER       #######################################################
 #######################################################################################################################
 #######################################################################################################################
-
 server <- function(input, output, session) {
   
-
   global <- reactiveValues(datapath = getwd())
   output$dir <- renderText({global$datapath}) #output$dir
   
@@ -162,8 +160,6 @@ server <- function(input, output, session) {
     dt_render
   })
 
-  
-  
   observeEvent(AGI_data(), {
     updateSelectInput(session, "select", choices=colnames(AGI_data()))
   })
@@ -199,7 +195,7 @@ server <- function(input, output, session) {
                                          colour ="black")
       )
   })
-  
+
   output$mapq <- renderPlot({
     # req(AGI_data())
     req(MAP_data())
@@ -213,8 +209,6 @@ server <- function(input, output, session) {
       theme(legend.position = "none")
   })
   
-
-
   output$AGI_dt <- renderDataTable(filtereddata(), options = list(scrollX = TRUE))
   
   output$barcode_geno <- renderDataTable(
@@ -223,66 +217,28 @@ server <- function(input, output, session) {
     )
   
   observeEvent(AGI_data(),updateSelectizeInput(session, "column", choices=names(AGI_data())))
-  
-  
+
   ######## SAVE TABLE
-  # Fait débuter le browser de fichiers de sauvegarde de df dans le home.
-  shinyDirChoose(
-    input,
-    'save_dir',
-    roots = c(home = './data')
-  ) #shinyDirChoose
   
-  save_global <- reactiveValues(datapath = getwd())
-  save_dir <- reactive(input$save_dir)
-  
-  output$save_dir <- renderText({ 
-    save_global$datapath 
-  }) #output$dir
-  
-  # Met a jour le path du dossier choisi.
-  observeEvent(ignoreNULL = TRUE, eventExpr = {input$save_dir},
-               handlerExpr = {
-                 if (!"path" %in% names(save_dir())) return()
-                 home <- normalizePath('./data')
-                 save_global$datapath <- file.path(home,
-                                                   paste(unlist(save_dir()$path[-1]),
-                                                         collapse = .Platform$file.sep))
-               }) #observeEvent
-  
-  # Fenêtre de confirmation de sauvegarde du dataframe.
-  observeEvent(input$save_df, {
-    default_name <- paste0(input$AGI, "tails.tsv")
-    showModal(modalDialog(
-      tagList(
-        textInput("filename", label = "Filename", placeholder = default_name, value = default_name),
-        
-        shinyDirButton("save_dir", 'Select where to save the dataframe', 'Please select a folder', FALSE),
-        verbatimTextOutput("save_dir", placeholder = TRUE)
-      ), 
-      title="Save the dataframe as .tsv",
-      footer = tagList(actionButton("confirmCreate", "Create"),
-                       modalButton("Cancel")
-      )
-    ))
-  })
-  
-  # Enregistre le dataframe en .tsv.
-  observeEvent(input$confirmCreate, { 
-    req(input$filename)
-    removeModal()
-    
-    show_modal_spinner(spin = "fingerprint", text=paste("exporting table")) # show the modal window
-    if (input$save_selection) {
-      write_tsv(filtereddata(), file.path(save_global$datapath, input$filename))
-    } else {
-      write_tsv(AGI_data(), file.path(save_global$datapath, input$filename))
+  output$downloadData <- downloadHandler(
+    filename = function() {
+      # Use the selected dataset as the suggested file name
+      current_datetime <- now()
+      formatted_datetime <- format(current_datetime, format = "%Y%m%d_%H%M%S")
+      print(formatted_datetime)
+      
+      paste0(input$AGI, "_", formatted_datetime, ".tsv")
+    },
+    content = function(file) {
+      # Write the dataset to the `file` that will be downloaded
+      if (input$save_selection) {
+        write_tsv(filtereddata(), file)
+      }else {
+        write_tsv(AGI_data(), file)
+      }
     }
-    
-    shinyalert("Nice!", paste("Export successfull", file.path(save_global$datapath, input$filename)), type = "success")
-    remove_modal_spinner() # remove it when done
-  })
-  
+  )
+
 } #server
 
 #######################################################################################################################

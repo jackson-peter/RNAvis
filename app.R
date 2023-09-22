@@ -8,10 +8,10 @@ source("global.R")
 header= dashboardHeader(title = "RNAvis", dropdownMenuOutput("notificationMenu"))
 
 sidebar <-   dashboardSidebar(
-  sidebarMenu( 
+  sidebarMenu(
     br(),
     h5(HTML("1 | Select a FLEPseq folder")),
-    
+
     selectInput("selectdir", 'Select File', c("Choose one" = "", flep_runs)),
 
     br(),
@@ -21,18 +21,20 @@ sidebar <-   dashboardSidebar(
                  label = "Get table",
                  style="color: #fffc300; background-color: #e95420; border-color: #c34113;
                                                          >border-radius: 10px; >border-width: 2px"),
-    
+
     h5(HTML("3 | Select usefull columns")),
     selectizeInput('column_sel', NULL,choices=NULL, selected=NULL, multiple=T),
     actionButton(inputId = "update",
                  label = "Update columns",
                  style="color: #fffc300; background-color: #e95420; border-color: #c34113;
                                                          >border-radius: 10px; >border-width: 2px"),
-    
+
     br(),
     h5(HTML("4 | Export Table")),
     checkboxInput("save_selection", "Only save selected columns?", value = FALSE, width = NULL),
-    downloadButton("downloadData", "Download")
+    downloadButton("downloadData", "Download",
+                   style="color: #fffc300; background-color: #e95420; border-color: #c34113;
+                                                        >border-radius: 10px; >border-width: 2px")
     #actionButton("save_df","Export Table",
     #             style="color: #fffc300; background-color: #e95420; border-color: #c34113;
     #                                                    >border-radius: 10px; >border-width: 2px")
@@ -46,22 +48,22 @@ body <- dashboardBody(
   tabsetPanel(
     tabPanel("General mRNA statistics",
              h2(textOutput("run_name")),
-               fluidRow(
-                 dataTableOutput("barcode_geno"),
-                 hr(),
-               ),
-               fluidRow(
-                 splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")),
-                 hr(),
-               ), 
-               
-      ), #tabPanel
+             fluidRow(
+               dataTableOutput("barcode_geno"),
+               hr(),
+             ),
+             fluidRow(
+               splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")),
+               hr(),
+             ), 
+             
+    ), #tabPanel
     tabPanel("Specific AGI",
              h2(textOutput("AGI_name")),
              fluidRow(uiOutput("AGI_dt_t"))
-             ), # tabPanel
-    ), #tabsetPanel
-  ) # /dashboardbody
+    ), # tabPanel
+  ), #tabsetPanel
+) # /dashboardbody
 
 
 ### UI construction

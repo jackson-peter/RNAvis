@@ -16,28 +16,21 @@ sidebar <-   dashboardSidebar(
 
     br(),
     h5(HTML("2 | Enter an AGI")),
-    textInput("AGI",value = "AT1G01010.1",label = NULL ), #textInput
+    #textInput("AGI",value = "AT5G09810.1",label = NULL ), #textInput
+    selectizeInput("AGI", inputId = 'AGI', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE)),
     actionButton(inputId = "SubmitAGI",
-                 label = "Get table",
-                 style="color: #fffc300; background-color: #e95420; border-color: #c34113;
-                                                         >border-radius: 10px; >border-width: 2px"),
+                 label = "Get table"),
 
     h5(HTML("3 | Select usefull columns")),
     selectizeInput('column_sel', NULL,choices=NULL, selected=NULL, multiple=T),
     actionButton(inputId = "update",
-                 label = "Update columns",
-                 style="color: #fffc300; background-color: #e95420; border-color: #c34113;
-                                                         >border-radius: 10px; >border-width: 2px"),
+                 label = "Update columns"),
 
     br(),
     h5(HTML("4 | Export Table")),
     checkboxInput("save_selection", "Only save selected columns?", value = FALSE, width = NULL),
-    downloadButton("downloadData", "Download",
-                   style="color: #fffc300; background-color: #e95420; border-color: #c34113;
-                                                        >border-radius: 10px; >border-width: 2px")
-    #actionButton("save_df","Export Table",
-    #             style="color: #fffc300; background-color: #e95420; border-color: #c34113;
-    #                                                    >border-radius: 10px; >border-width: 2px")
+    downloadButton("downloadData", "Download")
+
   ) #sidebarMenu
 )
 
@@ -56,12 +49,27 @@ body <- dashboardBody(
                splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")),
                hr(),
              ), 
-             
+
     ), #tabPanel
+
     tabPanel("Specific AGI",
              h2(textOutput("AGI_name")),
              fluidRow(uiOutput("AGI_dt_t"))
     ), # tabPanel
+    
+    
+    tabPanel("plot_3p_end",
+             #h2(textOutput("AGI_name")),
+             fluidRow(plotOutput("plot_3p_end")),
+             hr(),
+    ),
+    
+    tabPanel("plot_5p_end",
+             #h2(textOutput("AGI_name")),
+             fluidRow(plotOutput("plot_5p_end")),
+             hr(),
+    ),
+    
   ), #tabsetPanel
 ) # /dashboardbody
 
@@ -97,11 +105,17 @@ server <- function(input, output, session) {
                  
                  if (length(tail_files)>0) {
                    global$barcode_corr <- fread(barcode_file, col.names = c("barcode", "genotype"), header = F) %>%
-                     mutate(tabix_file= file.path(global$datapath, tail_dir, paste0(barcode, ".sorted.csv.gz")),
+                     mutate(tabix_file= file.path(global$datapath, tail_dir, paste0(barcode, index_ext)),
                             tail_file=file.path(global$datapath, tail_dir, paste0(barcode, tail_ext)),
-                            map_file=file.path(global$datapath, mapping_dir, paste0(barcode, mapping_ext)))
+                            map_file=file.path(global$datapath, mapping_dir, paste0(barcode, mapping_ext)),
+                            gene_list=file.path(global$datapath, tail_dir, paste0(barcode, tabix_l_ext)))
         # Check if files are tabixed, and tabix them if not
         apply(global$barcode_corr[,c('tabix_file','tail_file')], 1, function(y) check_if_tabixed(y['tabix_file'],y['tail_file']))
+        
+        genes_list=unique(rbindlist(lapply(global$barcode_corr$gene_list, fread, header=F)))
+        #updateSelectizeInput(session, "AGI_list", choices=genes_list)
+        updateSelectizeInput(session, 'AGI', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
+        
         
       } 
     }
@@ -114,11 +128,18 @@ server <- function(input, output, session) {
     map_files <- global$barcode_corr$map_file
     names(map_files) <- global$barcode_corr$genotype
     mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "origin")
+    
+  })
+  
+  output$run_name <- renderText({
+    req(MAP_data())
+    title <- basename(global$datapath)
   })
   
   # AGI_data is the data table of the AGI
   AGI_data <- eventReactive(input$SubmitAGI,{
     req(input$selectdir, input$AGI)
+    print(input$AGI)
     column_names <- names(fread(cmd = paste('head -n 1', global$barcode_corr$tail_file[1])))
     column_names <- c('origin', column_names)
     tabixed_list <- global$barcode_corr$tabix_file
@@ -131,13 +152,19 @@ server <- function(input, output, session) {
         colnames(AGI_DF) <- column_names
         AGI_DF <- AGI_DF %>% mutate(Run=basename(global$datapath))
         updateSelectizeInput(session, "column_sel", choices=colnames(AGI_DF))
+        
       },
       error = function(e){ 
         shinyalert("Erf!", "It seems that there's no data in the files chosen for the requested AGI", type = "warning")
       }
     )
-    
+    print(head(AGI_DF))
     return(AGI_DF)
+  })
+  
+  output$AGI_name <- renderText({
+    req(AGI_data())
+    title <- unique(AGI_data()$mRNA)
   })
   
   filtereddata <- eventReactive({
@@ -153,7 +180,6 @@ server <- function(input, output, session) {
     } 
   })
   
-  
   output$AGI_dt_t <- renderTable({
     dt_render <- filtereddata()
     validate(
@@ -162,21 +188,6 @@ server <- function(input, output, session) {
     dt_render
   })
 
-  observeEvent(AGI_data(), {
-    updateSelectInput(session, "select", choices=colnames(AGI_data()))
-  })
-
-  output$run_name <- renderText({
-    #req(AGI_data())
-    req(MAP_data())
-    title <- basename(global$datapath)
-  })
-  
-  output$AGI_name <- renderText({
-    req(AGI_data())
-    title <- unique(AGI_data()$mRNA)
-  })
-  
   output$coverage <- renderPlot({
     # req(AGI_data())
     req(MAP_data())
@@ -210,15 +221,11 @@ server <- function(input, output, session) {
       ggtitle("Mean mapping quality")+
       theme(legend.position = "none")
   })
-  
-  output$AGI_dt <- renderDataTable(filtereddata(), options = list(scrollX = TRUE))
-  
+
   output$barcode_geno <- renderDataTable(
     global$barcode_corr,
     options = list(scrollX = TRUE)
     )
-  
-  observeEvent(AGI_data(),updateSelectizeInput(session, "column", choices=names(AGI_data())))
 
   ######## SAVE TABLE
   
@@ -240,6 +247,50 @@ server <- function(input, output, session) {
       }
     }
   )
+  
+  # Plot position 3'.
+  output$plot_3p_end <- renderPlot({
+    req(AGI_data())
+    mRNA <- unique(AGI_data()$mRNA)
+    data_in <- AGI_data() %>% 
+      separate(read_core_id, into=c("readname", "Chr","genome_start_coord", "genome_end_coord"), sep=',', convert = T) %>%
+      separate(coords_in_read, into=c("gene_start", "gene_end", "polya_start", "polya_end", "add_start", "add_end", "adapt_start", "adapt_end"), sep=':', convert=T)
+    
+    ggplot(data_in, aes(genome_start_coord+gene_end)) +
+      geom_bar(aes(y = (..count..)/sum(..count..), fill=type)) +
+      geom_density() +
+      geom_gene_arrow( aes(xmin = unique(mRNA_start), xmax = unique(mRNA_end), y = 0)) +
+      geom_gene_label( aes(xmin = unique(mRNA_start), xmax = unique(mRNA_end), y = 0, label = mRNA)) +
+      facet_wrap(~origin, ncol=1) +
+
+      labs(title=paste("Counts of reads based on 3' ends of AGI", mRNA, ", n=", nrow(AGI_data()))) +
+      ylab("Counts of reads") +
+      xlab("3' ends coordinates") + 
+      theme(legend.position="bottom",legend.background = element_rect(size=0.5, linetype="solid"))
+      
+  })
+  
+  # Plot position 5'.
+  output$plot_5p_end <- renderPlot({
+    req(AGI_data())
+    mRNA <- unique(AGI_data()$mRNA)
+    data_in <- AGI_data() %>% 
+      separate(read_core_id, into=c("readname", "Chr","genome_start_coord", "genome_end_coord"), sep=',', convert = T) %>%
+      separate(coords_in_read, into=c("gene_start", "gene_end", "polya_start", "polya_end", "add_start", "add_end", "adapt_start", "adapt_end"), sep=':', convert=T)
+    
+    ggplot(data_in, aes(genome_start_coord+gene_start)) +
+      geom_bar(aes(y = (..count..)/sum(..count..), fill=type)) +
+      geom_density() +
+      geom_gene_arrow( aes(xmin = unique(mRNA_start), xmax = unique(mRNA_end), y = 0)) +
+      geom_gene_label( aes(xmin = unique(mRNA_start), xmax = unique(mRNA_end), y = 0, label = mRNA)) +
+      facet_wrap(~origin, ncol = 1) +
+      
+      labs(title=paste("Counts of reads based on 5' ends of AGI", mRNA, ", n=", nrow(AGI_data()))) +
+      ylab("Counts of reads") +
+      xlab("5' ends coordinates") +
+      theme(legend.position="bottom",legend.background = element_rect(size=0.5, linetype="solid"))
+  
+  })
 
 } #server
 

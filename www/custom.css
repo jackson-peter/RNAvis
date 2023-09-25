@@ -8,3 +8,9 @@ h2 {
   color:green;
 }
 
+.btn-default {
+  color: #fffc300;
+  background-color: #e95420;
+  border-radius: 10px;
+  border: 2px solid #c34113;
+}

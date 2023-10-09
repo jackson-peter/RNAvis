@@ -118,7 +118,7 @@ server <- function(input, output, session) {
                  global$datapath <- input$selectdir
                  
                  tail_files <- list.files(path=file.path(global$datapath,tail_dir), pattern = paste0(tail_ext, "$"),full.names = T)
-                 barcode_file <- file.path(global$datapath, sample_table)
+                 barcode_file <- list.files(path=global$datapath, pattern=sample_table, full.names = T)
                  mapping_files <- list.files(path=file.path(global$datapath,mapping_dir), pattern=paste0(mapping_ext, "$"), full.names=T)
                  
                  
@@ -130,6 +130,9 @@ server <- function(input, output, session) {
                             gene_list=file.path(global$datapath, tail_dir, paste0(barcode, tabix_l_ext)))
         # Check if files are tabixed, and tabix them if not
         apply(global$barcode_corr[,c('tabix_file','tail_file')], 1, function(y) check_if_tabixed(y['tabix_file'],y['tail_file']))
+        tabix_files <- paste(basename(global$barcode_corr$tail_file), collapse='\n')
+        print(tabix_files)
+        shinyalert("Nice!", paste("Successfully added", tabix_files, sep="\n"), type = "success")
         
         genes_list=unique(rbindlist(lapply(global$barcode_corr$gene_list, fread, header=F)))
         #updateSelectizeInput(session, "AGI_list", choices=genes_list)
@@ -198,31 +201,22 @@ server <- function(input, output, session) {
         colnames(AGI_DF) <- column_names
         AGI_DF <- AGI_DF %>% mutate(Run=basename(global$datapath))
         n_introns <- unique(AGI_DF$mRNA_intron_num)
-        draw_sequence <- c()
+
         if (n_introns>0) {
           intron_cols <- paste0("intron",1:n_introns)
-          # REMOVE THOSE LINES?
-          exon_lengths = GFF_DF%>%filter(feature=="exon") %>% pull(width)
-          intron_lengths = GFF_DF%>%filter(feature=="intron") %>% pull(width)
-          subgene_lengths=paste(cumsum(c(exon_lengths,intron_lengths)[order(c(seq_along(exon_lengths),seq_along(intron_lengths)))]), collapse=':')
-          # \REMOVE?
-          
-          
           setDT(AGI_DF)
-          print("EEDGEDGDEG")
-          print(intron_cols)
 
-          print(AGI_DF)
           AGI_DF <- AGI_DF[, paste(intron_cols) := lapply(paste(intron_cols), getIntronsRetained, retained_introns = as.character(retention_introns)), by = retention_introns]
-          print("EEDGEDGDEG222222222")
-          print(AGI_DF)
 
           coords_df <- build_coords_df(AGI_DF, GFF_DF, intron_cols) %>%
             group_by(read_core_id) %>%
             mutate(ID = cur_group_id())
-          
 
-        } 
+        } else {
+          coords_df <- build_coords_df(AGI_DF, GFF_DF, NA) %>%
+            group_by(read_core_id) %>%
+            mutate(ID = cur_group_id())
+        }
         updateSelectizeInput(session, "column_sel", choices=colnames(AGI_DF))
         
       },

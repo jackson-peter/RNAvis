@@ -1,4 +1,5 @@
 source("global.R")
+source("ui_helper_funct.R")
 theme_set(theme_bw())
 
 ###
@@ -9,29 +10,40 @@ theme_set(theme_bw())
 ############################################       UI       ###########################################################
 #######################################################################################################################
 #######################################################################################################################
-header= dashboardHeader(title = "RNAvis", dropdownMenuOutput("notificationMenu"))
+header <- 
+  dashboardHeader( title = HTML("RNAvis"),
+                   disable = F,
+                   dropdownMenuCustom( type = 'message',
+                                       customSentence = "ebebebebedb",
+                                       messageItem(
+                                         from = "jackson.peter",#'Feedback and suggestions',
+                                         message =  "",#paste0("jackson.peter@ibmp-cnrs.unistra.fr" ),
+                                         icon = icon("envelope"),
+                                         href = "mailto:jackson.peter@ibmp-cnrs.unistra.fr"),
+                                       icon = icon('comment'))
+                   )
 
-sidebar <-   dashboardSidebar(
-  sidebarMenu(
-    h5(HTML("1 | Select a FLEPseq folder")),
 
-    selectInput("selectdir", 'Select a directory', c("Choose one" = "", flep_runs)),
-
-
-    h5(HTML("2 | Enter an AGI")),
-    selectizeInput("AGI", inputId = 'AGI', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE)),
-    actionButton(inputId = "SubmitAGI",
-                 label = "Get table"),
-
-    h5(HTML("3 | Select usefull columns")),
-    selectizeInput('column_sel', NULL,choices=NULL, selected=NULL, multiple=T),
-    actionButton(inputId = "update",
+sidebar <-
+  dashboardSidebar(
+    sidebarMenu(
+      id="sidebar",
+      h5(HTML("1 | Select a FLEPseq folder")),
+      selectInput("selectdir", 'Select a directory', c("Choose one" = "", flep_runs)),
+      
+      h5(HTML("2 | Enter an AGI")),
+      selectizeInput("AGI", inputId = 'AGI', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE)),
+      actionButton(inputId = "SubmitAGI",
+                   label = "Get table"),
+      
+      h5(HTML("3 | Select usefull columns")),
+      selectizeInput('column_sel', NULL,choices=NULL, selected=NULL, multiple=T),
+      actionButton(inputId = "update",
                  label = "Update columns"),
 
-
-    h5(HTML("4 | Export Table")),
-    checkboxInput("save_selection", "Only save selected columns?", value = FALSE, width = NULL),
-    downloadButton("downloadData", "Download")
+      h5(HTML("4 | Export Table")),
+      checkboxInput("save_selection", "Only save selected columns?", value = FALSE, width = NULL),
+      downloadButton("downloadData", "Download")
 
   ) #sidebarMenu
 )
@@ -68,23 +80,13 @@ body <- dashboardBody(
              #fluidRow(uiOutput("AGI_dt_t"))
              fluidRow(uiOutput("AGI_dt_t"))
     ), # tabPanel
-    
-    tabPanel("plot_5p_end",
-             fluidRow(plotOutput("plot_gene5p"),
-                      plotOutput("plot_5p_end")),
 
-    ),
-    tabPanel("plot_3p_end",
-             fluidRow(plotOutput("plot_gene3p"),
-                      plotOutput("plot_3p_end")),
-
-    ),
     tabPanel("GFF_gene",
              fluidRow(dataTableOutput("GFF_table")),
              
     ),
-    tabPanel("reads",
-             fluidRow(plotOutput("plot_reads", height=1600)),
+    tabPanel("Reads viewer",
+             fluidRow(plotOutput("plot_reads", height=8000)),
             
     )
     
@@ -131,7 +133,6 @@ server <- function(input, output, session) {
         # Check if files are tabixed, and tabix them if not
         apply(global$barcode_corr[,c('tabix_file','tail_file')], 1, function(y) check_if_tabixed(y['tabix_file'],y['tail_file']))
         tabix_files <- paste(basename(global$barcode_corr$tail_file), collapse='\n')
-        print(tabix_files)
         shinyalert("Nice!", paste("Successfully added", tabix_files, sep="\n"), type = "success")
         
         genes_list=unique(rbindlist(lapply(global$barcode_corr$gene_list, fread, header=F)))
@@ -195,6 +196,7 @@ server <- function(input, output, session) {
     names(tabixed_list) <- global$barcode_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
     AGI_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files, AGI=input$AGI), idcol = "origin")
+    
     tryCatch(
       expr = {
         
@@ -205,18 +207,18 @@ server <- function(input, output, session) {
         if (n_introns>0) {
           intron_cols <- paste0("intron",1:n_introns)
           setDT(AGI_DF)
-
           AGI_DF <- AGI_DF[, paste(intron_cols) := lapply(paste(intron_cols), getIntronsRetained, retained_introns = as.character(retention_introns)), by = retention_introns]
-
-          coords_df <- build_coords_df(AGI_DF, GFF_DF, intron_cols) %>%
-            group_by(read_core_id) %>%
-            mutate(ID = cur_group_id())
+          coords_df <- build_coords_df(AGI_DF, GFF_DF, intron_cols) 
 
         } else {
-          coords_df <- build_coords_df(AGI_DF, GFF_DF, NA) %>%
-            group_by(read_core_id) %>%
-            mutate(ID = cur_group_id())
+          coords_df <- build_coords_df(AGI_DF, GFF_DF, NA) 
         }
+
+        coords_df <- coords_df %>%
+          group_by( chr, read_start, read_end, retention_introns, polya_length, additional_tail) %>%
+          arrange(read_end-read_start,retention_introns, polya_length, str_length(additional_tail)) %>%
+          mutate(ID = cur_group_id())
+        
         updateSelectizeInput(session, "column_sel", choices=colnames(AGI_DF))
         
       },
@@ -325,136 +327,58 @@ server <- function(input, output, session) {
   })
   
 
-  # Plot position 3'.
-  output$plot_3p_end <- renderPlot({
-    req(AGI_data())
-    mRNA <- unique(AGI_data()$AGI_DF$mRNA)
-    data_in <- AGI_data()$AGI_DF %>% 
-      separate(read_core_id, into=c("readname", "Chr","genome_start_coord", "genome_end_coord"), sep=',', convert = T) %>%
-      separate(coords_in_read, into=c("gene_start", "gene_end", "polya_start", "polya_end", "add_start", "add_end", "adapt_start", "adapt_end"), sep=':', convert=T)
-    
-    ggplot(data_in, aes(genome_start_coord+gene_end)) +
-      geom_bar(aes(y = (..count..)/sum(..count..), fill=type)) +
-      geom_density() +
-      facet_wrap(~origin, ncol=1) +
-      labs(title=paste("Counts of reads based on 3' ends of AGI", mRNA, ", n=", nrow(AGI_data()$AGI_DF))) +
-      ylab("Counts of reads") +
-      xlab("3' ends coordinates") +
-      theme(legend.position="bottom",
-            legend.background = element_rect(fill="white", size=0.5, linetype="solid", colour ="black"))
-      
-  })
-  
-  output$plot_gene5p <- renderPlot({
-    req(AGI_data())
-    gff_gene <- AGI_data()$GFF_DF %>% filter(feat_type=="gene")
-    gff_subgene <- AGI_data()$GFF_DF %>% filter(feat_type=="subgene") %>%
-      mutate(parent_start=unique(gff_gene$start),
-             parent_stop=unique(gff_gene$end))
-    
-    ggplot(gff_gene, aes(xmin = start, xmax = end, y = source, forward=orientation)) +
-      #facet_wrap(~ molecule, scales = "free", ncol = 1) +
-      geom_gene_arrow(fill = "white") +
-      geom_subgene_arrow(data = gff_subgene,
-                         aes(xmin = parent_start, xmax = parent_stop, y = source, fill = feature,
-                             xsubmin = start, xsubmax = end), color="black", alpha=.7) +
-      theme_genes()
-  })
-  
-  output$plot_gene3p <- renderPlot({
-    req(AGI_data())
-    gff_gene <- AGI_data()$GFF_DF %>% filter(feat_type=="gene")
-    gff_subgene <- AGI_data()$GFF_DF %>% filter(feat_type=="subgene") %>%
-      mutate(parent_start=unique(gff_gene$start),
-             parent_stop=unique(gff_gene$end))
-    
-
-    
-    ggplot(gff_gene, aes(xmin = start, xmax = end, y = source, forward=orientation)) +
-      #facet_wrap(~ molecule, scales = "free", ncol = 1) +
-      geom_gene_arrow(fill = "white") +
-      geom_subgene_arrow(data = gff_subgene,
-                         aes(xmin = parent_start, xmax = parent_stop, y = source, fill = feature,
-                             xsubmin = start, xsubmax = end), color="black", alpha=.7) +
-      theme_genes()
-  })
-  
   output$plot_reads <- renderPlot({
     req(AGI_data())
-    coords_df <- AGI_data()$COORDS_DF
-    #reads=c("e8b23c2d-e2dd-45bd-983c-cacb15bc9cf7", "a00abf0f-75ab-4bfd-85be-9dac7abbf328", "b308939f-4e77-4be6-9c3b-f493bb3dbb93")
-    #df <- AGI_data()$COORDS_DF %>% filter(read_id %in% reads)
-    df_coords_gene <- AGI_data()$COORDS_DF %>% 
+    coords_df <- AGI_data()$COORDS_DF 
+    print(coords_df)
+    df_coords_gene <- coords_df %>% 
       filter(feat_type=="gene") 
     
     df_coords_gene <- df_coords_gene[!duplicated(df_coords_gene$mRNA, df_coords_gene$retention_introns),]
     
-    
-    df_coords_subgene <- AGI_data()$COORDS_DF %>% filter(feat_type=="subgene") %>%
+    df_coords_subgene <- coords_df %>% filter(feat_type=="subgene") %>%
       mutate(parent_start=unique(df_coords_gene$start),
              parent_stop=unique(df_coords_gene$end))
     
-    df_coords_transcript <- AGI_data()$COORDS_DF %>% filter(feat_type=="transcript")
-    # transcript_start <- unique(df_coords_transcript$start)
-    # transcript_end <- unique(df_coords_transcript$end)
-    # 
+    df_coords_tails <- coords_df %>% filter(feat_type=="tail") 
+
+    df_coords_tails <- df_coords_tails%>%
+      mutate(parent_start=unique(df_coords_gene$start),
+             parent_stop=unique(end))
+    
+    df_coords_transcript <- coords_df %>% filter(feat_type=="transcript")
+
     df_coords_transcript_subgene <- df_coords_subgene %>%
       filter(start>=read_start,
              end<=read_end)
-   
-    
-    
-    print("GENE")
-    print(df_coords_gene)
-    write_tsv(df_coords_gene, file="~/DATA/testGENE.tsv")
-    print("SUBGENE")
-    print(df_coords_subgene)
-    write_tsv(df_coords_subgene, file="~/DATA/testSUBGENE.tsv")
-    print(df_coords_transcript)
-    write_tsv(df_coords_transcript, file="~/DATA/testTRANSCRIPT.tsv")
-    
+    df_coords_transcript_subgene_tail <- rbind(df_coords_transcript_subgene, df_coords_tails)
 
+    df_coords_transcript_subgene_tail$parent_start <- min(df_coords_transcript_subgene_tail$start)
+    df_coords_transcript_subgene_tail$parent_stop <- max(df_coords_transcript_subgene_tail$end)
+    
+    
+    
     ggplot() +
+      # plot all transcripts
       geom_gene_arrow(data=df_coords_transcript,
-                      aes(xmin = start, xmax = end, y = ID), fill = "white") +
-      
-      geom_subgene_arrow(data = df_coords_transcript_subgene,
+                      aes(xmin = start, xmax = end, y = ID), arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
+      # and their sub elements
+      geom_subgene_arrow(data = df_coords_transcript_subgene_tail,
+                         #aes(xmin = parent_start, xmax = parent_stop, y = ID, fill = feature,
                          aes(xmin = parent_start, xmax = parent_stop, y = ID, fill = feature,
-                             xsubmin = start, xsubmax = end), color="black", alpha=.4) +
-      
-      
+                             xsubmin = start, xsubmax = end), color="black", alpha=.4, arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
+
+      # plot model gene...
       geom_gene_arrow(data=df_coords_gene, 
-                      aes(xmin = start, xmax = end, y = -1), fill = "white") +
+                      aes(xmin = start, xmax = end, y = -2), fill = "white", arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
+      # ...annotated
       geom_subgene_arrow(data = df_coords_subgene,
-                         aes(xmin = parent_start, xmax = parent_stop, y = -1, fill = feature,
-                             xsubmin = start, xsubmax = end), color="black") +
-      
-      
-      
-      
-      facet_wrap(~retention_introns, ncol = 1) 
+                         aes(xmin = parent_start, xmax = parent_stop, y = -2, fill = feature,
+                             xsubmin = start, xsubmax = end), color="black", arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
+
+      facet_grid(origin~retention_introns) 
   })
-  
-  # Plot position 5'.
-  output$plot_5p_end <- renderPlot({
-    req(AGI_data())
-    mRNA <- unique(AGI_data()$AGI_DF$mRNA)
-    data_in <- AGI_data()$AGI_DF %>% 
-      separate(read_core_id, into=c("readname", "Chr","genome_start_coord", "genome_end_coord"), sep=',', convert = T) %>%
-      separate(coords_in_read, into=c("gene_start", "gene_end", "polya_start", "polya_end", "add_start", "add_end", "adapt_start", "adapt_end"), sep=':', convert=T)
-    
-    
-    ggplot(data_in, aes(genome_start_coord+gene_start)) +
-      geom_bar(aes(y = (..count..)/sum(..count..), fill=type)) +
-      geom_density()+
-      facet_wrap(~origin, ncol = 1) +
-      labs(title=paste("Counts of reads based on 5' ends of AGI", mRNA, ", n=", nrow(AGI_data()$AGI_DF))) +
-      ylab("Counts of reads") +
-      xlab("5' ends coordinates") +
-      theme(legend.position="bottom",
-            legend.background = element_rect(fill="white", size=0.5, linetype="solid", colour ="black"))
-  
-  })
+
   
 } #server
 

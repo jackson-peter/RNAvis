@@ -1,6 +1,7 @@
 source("global.R")
-source("ui_helper_funct.R")
+source("helper_functions.R")
 theme_set(theme_bw())
+
 
 ###
 # 1
@@ -10,11 +11,13 @@ theme_set(theme_bw())
 ############################################       UI       ###########################################################
 #######################################################################################################################
 #######################################################################################################################
+
+# header ------
 header <- 
   dashboardHeader( title = HTML("RNAvis"),
                    disable = F,
                    dropdownMenuCustom( type = 'message',
-                                       customSentence = "ebebebebedb",
+                                       customSentence = "feedback & suggestions",
                                        messageItem(
                                          from = "jackson.peter",#'Feedback and suggestions',
                                          message =  "",#paste0("jackson.peter@ibmp-cnrs.unistra.fr" ),
@@ -23,78 +26,89 @@ header <-
                                        icon = icon('comment'))
                    )
 
-
+# sidebar ------
 sidebar <-
   dashboardSidebar(
-    sidebarMenu(
-      id="sidebar",
-      h5(HTML("1 | Select a FLEPseq folder")),
-      selectInput("selectdir", 'Select a directory', c("Choose one" = "", flep_runs)),
-      
-      h5(HTML("2 | Enter an AGI")),
-      selectizeInput("AGI", inputId = 'AGI', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE)),
-      actionButton(inputId = "SubmitAGI",
-                   label = "Get table"),
-      
-      h5(HTML("3 | Select usefull columns")),
-      selectizeInput('column_sel', NULL,choices=NULL, selected=NULL, multiple=T),
-      actionButton(inputId = "update",
-                 label = "Update columns"),
+    hr(),
+    sidebarMenu(id = "tabs",
+                menuItem("Main Dashboard", tabName = 'dashboard', icon = icon('dashboard', selected=TRUE)),
+                menuItem("Plots", tabName = "plots", icon=icon("line-chart")),
+                #menuItem("Tables", tabName = "tables", icon=icon("list-alt", lib="glyphicon"))
+                menuItem("Tables", tabName = "tables", icon=icon("table"))
+                
+    ) #/ sidebarmenu
+  ) #/ dashboardsidebar
 
-      h5(HTML("4 | Export Table")),
-      checkboxInput("save_selection", "Only save selected columns?", value = FALSE, width = NULL),
-      downloadButton("downloadData", "Download")
-
-  ) #sidebarMenu
-)
-
-body <- dashboardBody(
-  tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "custom.css")
-  ),
-  
-  tabsetPanel(
-    tabPanel("FLEPseq Runs",
-             h2('FLEPseq Runs infos'),
-             fluidRow(
-               dataTableOutput("flepRunTable")
-             ),
-
-             
-    ), #tabPanel
-    tabPanel("General mRNA statistics",
-             h2(textOutput("run_name")),
-             fluidRow(
-               dataTableOutput("barcode_geno"),
-               hr(),
-             ),
-             fluidRow(
-               splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")),
-               hr(),
-             ), 
-
-    ), #tabPanel
-
-    tabPanel("Specific AGI",
-             h2(textOutput("AGI_name")),
-             #fluidRow(uiOutput("AGI_dt_t"))
-             fluidRow(uiOutput("AGI_dt_t"))
-    ), # tabPanel
-
-    tabPanel("GFF_gene",
-             fluidRow(dataTableOutput("GFF_table")),
-             
-    ),
-    tabPanel("Reads viewer",
-             fluidRow(plotOutput("plot_reads", height=8000)),
-            
-    )
+body <-   dashboardBody(
+  # Sidebar Tab Main dashboard -----
+  tabItems(
+    # sidebar Tab: dashboard
+    tabItem(tabName = "dashboard", 
+            # 1st line: a box containing dropdown list for input directory and gene selection
+            fluidRow(
+              box(width = 12, status = "primary", solidHeader = TRUE, title="Input files selector",
+                  column(width=12, 
+                         selectInput("selectdir", NULL, choices = c("Choose one" = "", flep_runs))), # input dir input field
+                  column(width=6,
+                         selectizeInput("AGI", inputId = 'AGI', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE))),
+                  column(width=6,
+                         actionButton(inputId = "SubmitAGI", label = "Get table")),
+                  column(width=12, 
+                             #verbatimTextOutput("rundir"),
+                             textOutput("rundir"),
+                             textOutput("agi")))
+                             #verbatimTextOutput("agi")))
+            ), # /fluidrow
+            fluidRow(
+              box(width = 12, status = "primary", solidHeader = TRUE, title="Input files details", collapsible = T, collapsed = T,
+                  column(width=12, 
+                         fluidRow(dataTableOutput("barcode_geno")))
+              ), #/ box
+              
+            ), #/ fluidrow
+            fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")))
+    ), # /tabitem dashboard
     
-  ), #tabsetPanel
-) # /dashboardbody
+    # Sidebar Tab Plots -----
+    tabItem(tabName = "plots",
+            fluidRow(
+              tabBox(title = "Plots",
+                     width = NULL,
+                     tabPanel(h5("READS"),uiOutput("plotreads.ui"))
+                     #tabPanel(h5("READS"),uiOutput("plotreads.ui")),
+                     )
+            ),
+    ),
+
+    # Sidebar Tab Tables -----
+    tabItem(tabName="tables",
+            fluidRow(
+              tabBox(title = "Tables",
+                     width=NULL,
+                     tabPanel(h5("Annotation"), dataTableOutput("GFF_table")),
+                     tabPanel(h5("AGI infos"), 
+                              fluidRow(
+                                selectizeInput('column_sel', NULL,choices=NULL, selected=NULL, multiple=T),
+                                actionButton(inputId = "update",
+                                             label = "Update columns"),
+                                checkboxInput("save_selection", "Only save selected columns?", value = FALSE, width = NULL),
+                                downloadButton("downloadData", "Download"),
+                                uiOutput("AGI_dt_t")
+                                       
+                              )
+        
+                    )
+
+              )
+            )
+    )
+
+  )
+) #/ dashboardbody 
+
 
 ### UI construction
-ui <- dashboardPage(skin="green",
+ui <- dashboardPage(skin="black",
   header, 
   sidebar,
   body
@@ -108,41 +122,58 @@ ui <- dashboardPage(skin="green",
 ############################################       SERVER       #######################################################
 #######################################################################################################################
 #######################################################################################################################
+
 server <- function(input, output, session) {
   
   global <- reactiveValues(datapath = getwd())
-  output$dir <- renderText({global$datapath}) #output$dir
+  
+  text_rundir <- reactiveVal('Please select a directory')
+  output$rundir <- renderText({text_rundir()}) #output$rundir
+  
+  text_agi <- reactiveVal('Please select a gene')
+  output$agi <- renderText({text_agi()}) #output$rundir
     
   # Met a jour le path du dossier choisi, associe les barcodes aux génotypes
   observeEvent(ignoreNULL = TRUE,
                eventExpr = {input$selectdir},
                handlerExpr = {
-                 global$datapath <- input$selectdir
-                 
-                 tail_files <- list.files(path=file.path(global$datapath,tail_dir), pattern = paste0(tail_ext, "$"),full.names = T)
-                 barcode_file <- list.files(path=global$datapath, pattern=sample_table, full.names = T)
-                 mapping_files <- list.files(path=file.path(global$datapath,mapping_dir), pattern=paste0(mapping_ext, "$"), full.names=T)
-                 
-                 
-                 if (length(tail_files)>0) {
-                   global$barcode_corr <- fread(barcode_file, col.names = c("barcode", "genotype"), header = F) %>%
-                     mutate(tabix_file= file.path(global$datapath, tail_dir, paste0(barcode, index_ext)),
-                            tail_file=file.path(global$datapath, tail_dir, paste0(barcode, tail_ext)),
-                            map_file=file.path(global$datapath, mapping_dir, paste0(barcode, mapping_ext)),
-                            gene_list=file.path(global$datapath, tail_dir, paste0(barcode, tabix_l_ext)))
-        # Check if files are tabixed, and tabix them if not
-        apply(global$barcode_corr[,c('tabix_file','tail_file')], 1, function(y) check_if_tabixed(y['tabix_file'],y['tail_file']))
-        tabix_files <- paste(basename(global$barcode_corr$tail_file), collapse='\n')
-        shinyalert("Nice!", paste("Successfully added", tabix_files, sep="\n"), type = "success")
-        
-        genes_list=unique(rbindlist(lapply(global$barcode_corr$gene_list, fread, header=F)))
-        #updateSelectizeInput(session, "AGI_list", choices=genes_list)
-        updateSelectizeInput(session, 'AGI', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
-        
-      } 
-    }
+                 if (!input$selectdir == "") {
+                   text_rundir(paste("Selected directory:",input$selectdir, sep=" ")) # set new value to reactiveVal
+                   global$datapath <- input$selectdir
+                   
+                   tail_files <- list.files(path=file.path(global$datapath,tail_dir), pattern = paste0(tail_ext, "$"),full.names = T)
+                   barcode_file <- list.files(path=global$datapath, pattern=sample_table, full.names = T)
+                   mapping_files <- list.files(path=file.path(global$datapath,mapping_dir), pattern=paste0(mapping_ext, "$"), full.names=T)
+
+                   if (length(tail_files)>0) {
+                     global$barcode_corr <- fread(barcode_file, col.names = c("barcode", "genotype"), header = F) %>%
+                       mutate(tabix_file= file.path(global$datapath, tail_dir, paste0(barcode, index_ext)),
+                              tail_file=file.path(global$datapath, tail_dir, paste0(barcode, tail_ext)),
+                              map_file=file.path(global$datapath, mapping_dir, paste0(barcode, mapping_ext)),
+                              gene_list=file.path(global$datapath, tail_dir, paste0(barcode, tabix_l_ext)))
+                     
+                     
+                     # Check if files are tabixed, and tabix them if not
+                     apply(global$barcode_corr[,c('tabix_file','tail_file')], 1, function(y) check_if_tabixed(y['tabix_file'],y['tail_file']))
+                     tabix_files <- paste(basename(global$barcode_corr$tail_file), collapse='\n')
+                     shinyalert("Nice!", paste("Successfully added", tabix_files, sep="\n"), type = "success")
+                     genes_list=unique(rbindlist(lapply(global$barcode_corr$gene_list, fread, header=F)))
+                     #updateSelectizeInput(session, "AGI_list", choices=genes_list)
+                     updateSelectizeInput(session, 'AGI', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
+                     
+                   } 
+                 }
+              }
   )
   
+  observeEvent(ignoreNULL = TRUE,
+               eventExpr = {input$AGI},
+               handlerExpr = {
+                 if (!input$selectdir == "") {
+                  text_agi(paste("Selected gene:",input$AGI, sep=" "))}
+               })
+                   
+
   # Mapping data
   MAP_data <- eventReactive(input$selectdir,{
     req(global$barcode_corr)
@@ -151,18 +182,13 @@ server <- function(input, output, session) {
     mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "origin")
     
   })
-  
-  output$flepRunTable <- renderDataTable({runs_infos})
-  
-  output$run_name <- renderText({
-    req(MAP_data())
-    title <- basename(global$datapath)
-  })
-  
+
   AGI_data <- eventReactive(input$SubmitAGI,{
+
     req(input$selectdir, input$AGI)
+    #text_agi(paste("Selected AGI:",input$AGI, sep=" ")) # set new value to reactiveVal
+
     gff_infos <- read_GFF_file(ref_gff, input$AGI)
-    
     mRNA_df <- gff_infos%>%
       filter(feature=="mRNA")
     exon_df <- gff_infos%>%
@@ -189,20 +215,20 @@ server <- function(input, output, session) {
         arrange(start)
     }
     
-    
     column_names <- names(fread(cmd = paste('head -n 1', global$barcode_corr$tail_file[1])))
     column_names <- c('origin', column_names)
     tabixed_list <- global$barcode_corr$tabix_file
     names(tabixed_list) <- global$barcode_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
     AGI_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files, AGI=input$AGI), idcol = "origin")
-    
+
     tryCatch(
       expr = {
         
         colnames(AGI_DF) <- column_names
         AGI_DF <- AGI_DF %>% mutate(Run=basename(global$datapath))
         n_introns <- unique(AGI_DF$mRNA_intron_num)
+
 
         if (n_introns>0) {
           intron_cols <- paste0("intron",1:n_introns)
@@ -230,7 +256,7 @@ server <- function(input, output, session) {
     )
     
     AGI_DATA <- list(AGI_DF = AGI_DF, GFF_DF = GFF_DF, COORDS_DF = coords_df)
-    
+
     return(AGI_DATA)
     
   })
@@ -326,11 +352,9 @@ server <- function(input, output, session) {
       theme(legend.position = "none")
   })
   
-
   output$plot_reads <- renderPlot({
     req(AGI_data())
     coords_df <- AGI_data()$COORDS_DF 
-    print(coords_df)
     df_coords_gene <- coords_df %>% 
       filter(feat_type=="gene") 
     
@@ -340,24 +364,22 @@ server <- function(input, output, session) {
       mutate(parent_start=unique(df_coords_gene$start),
              parent_stop=unique(df_coords_gene$end))
     
-    df_coords_tails <- coords_df %>% filter(feat_type=="tail") 
-
-    df_coords_tails <- df_coords_tails%>%
+    df_coords_tails <- coords_df %>% filter(feat_type=="tail") %>%
       mutate(parent_start=unique(df_coords_gene$start),
              parent_stop=unique(end))
-    
-    df_coords_transcript <- coords_df %>% filter(feat_type=="transcript")
 
+
+    df_coords_transcript <- coords_df %>% filter(feat_type=="transcript")
     df_coords_transcript_subgene <- df_coords_subgene %>%
       filter(start>=read_start,
              end<=read_end)
-    df_coords_transcript_subgene_tail <- rbind(df_coords_transcript_subgene, df_coords_tails)
 
-    df_coords_transcript_subgene_tail$parent_start <- min(df_coords_transcript_subgene_tail$start)
-    df_coords_transcript_subgene_tail$parent_stop <- max(df_coords_transcript_subgene_tail$end)
-    
-    
-    
+    df_coords_transcript_subgene_tail <- rbind(df_coords_transcript_subgene, df_coords_tails)
+    print(df_coords_transcript_subgene_tail$start)
+
+    df_coords_transcript_subgene_tail$parent_start <- min(df_coords_transcript_subgene_tail$start, na.rm = T)
+    df_coords_transcript_subgene_tail$parent_stop <- max(df_coords_transcript_subgene_tail$end, na.rm=T)
+
     ggplot() +
       # plot all transcripts
       geom_gene_arrow(data=df_coords_transcript,
@@ -377,6 +399,17 @@ server <- function(input, output, session) {
                              xsubmin = start, xsubmax = end), color="black", arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
 
       facet_grid(origin~retention_introns) 
+  })
+  
+  ploutCountRead <- reactive({
+    req(AGI_data())
+    return(nrow(AGI_data()$AGI_DF))
+  })
+  
+  plotHeight <- reactive(20 * ploutCountRead()) 
+  
+  output$plotreads.ui <- renderUI({
+    plotOutput("plot_reads", height = plotHeight())
   })
 
   

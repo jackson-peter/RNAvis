@@ -1,13 +1,15 @@
+source("global.R")
 #### SERVER ####
 
 # Sort file and tabix
 sort_and_tabix <- function(tail_f) {
   bgzip <- file.path(HTSLIB_PATH,"bgzip")
   tabix <- file.path(HTSLIB_PATH,"tabix")
-  
+  print("TABIX")
   tail_f_sorted <- gsub(tail_ext, ".sorted.csv", tail_f)
   tabix_l_file <- gsub(tail_ext, tabix_l_ext, tail_f)
   tail_f_gz <- paste0(tail_f_sorted, ".gz")
+  print(tail_f_gz)
   sort_cmd=paste0("{ head -n 1 ",tail_f, " && tail -n +2 ", tail_f, " | sort -k",AGI_col," -k",start_col,"n,",end_col,"n; } > ", tail_f_sorted)
   tabix_cmd <- paste(bgzip, tail_f_sorted, "&&",  tabix, tail_f_gz, "-S 1 -s",AGI_col,"-b",start_col,"-e",end_col)
   
@@ -35,9 +37,7 @@ check_if_tabixed <- function(tabix_file,tail_file, index=".tbi") {
 
 # Read only part of files containing users' AGI 
 read_tabixed_files <- function(file, AGI) {
-  
   dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, AGI, "-h"), header = F)
-  
   return(dt)
 }
 
@@ -64,15 +64,23 @@ getIntronsRetained <- function(intron_name, retained_introns){
 
 build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
   
-  if (is.vector(intron_cols)) {
-    print(intron_cols)
-    cols_to_keep <- c(intron_cols, "read_core_id", "mRNA", "retention_introns", "coords_in_read", "feat_id", "polya_length", "additional_tail", "origin")
-    
-    AGI_df_coords <- AGI_df %>% dplyr::select(any_of(cols_to_keep)) %>%
-      left_join(GFF_DF, by = c("mRNA"="AGI"), relationship = "many-to-many") %>%
-      separate(read_core_id, into=c("read_id", "chr", "read_start", "read_end"), sep = ',' , remove = F, convert = T) %>%
-      mutate(addtail_nchar =nchar(additional_tail))
-    
+  AGI_df_coords <- AGI_df  %>%
+    left_join(GFF_DF, by = c("mRNA"="AGI"), relationship = "many-to-many") %>%
+    separate(read_core_id, into=c("read_id", "chr", "read_start", "read_end"), sep = ',' , remove = F, convert = T) %>%
+    mutate(addtail_nchar =nchar(additional_tail))
+  
+  transcripts_df <- AGI_df_coords %>%
+    filter(feature=="mRNA") %>%
+    mutate(feature="transcript",
+           feat_type="transcript",
+           feat_id="transcript1",
+           start=as.numeric(read_start),
+           end=as.numeric(read_end))
+  
+  if (!is.na(intron_cols)) {
+
+    cols_to_keep <- c(intron_cols, "read_core_id", "mRNA", "retention_introns", "coords_in_read",  "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type")
+
     # This data frame looks for the values of feat_id that are also column names (intron1 intron2 ...)
     # and checks whether it is retained or not.
     to_rem <- AGI_df_coords %>%
@@ -85,45 +93,33 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
     AGI_df_coords<- AGI_df_coords %>%
       filter(feature!="intron") %>%
       mutate(retained=FALSE)
-    
-    transcripts_df <- AGI_df_coords %>%
-      filter(feature=="mRNA") %>%
-      mutate(feature="transcript",
-             feat_type="transcript",
-             feat_id="transcript1",
-             start=as.numeric(read_start),
-             end=as.numeric(read_end))
-    
-    AGI_df_coords <-  bind_rows(AGI_df_coords, to_rem, transcripts_df)%>%
+
+    AGI_df_coords <- AGI_df_coords %>%dplyr::select(all_of(c(cols_to_keep)))%>%
+      bind_rows(AGI_df_coords, to_rem, transcripts_df)%>%
+      
       dplyr::select(-c(intron_cols))
     
+
+    
   } else  if (is.na(intron_cols)) {
-    cols_to_keep <- c("read_core_id", "mRNA", "retention_introns", "coords_in_read", "feat_id")
-    
-    AGI_df_coords <- AGI_df %>% dplyr::select(any_of(cols_to_keep)) %>%
-      left_join(GFF_DF, by = c("mRNA"="AGI")) %>%
-      separate(read_core_id, into=c("read_id", "chr", "read_start", "read_end"), sep = ',' , remove = F, convert = T)
-    
-    
+    cols_to_keep <- c("read_core_id", "mRNA", "retention_introns", "coords_in_read", "feat_id", "feature", "feat_type")
+
+    AGI_df_coords <- AGI_df_coords 
+    AGI_df_coords <-  bind_rows(AGI_df_coords, transcripts_df)
+
+
     AGI_df_coords<- AGI_df_coords %>%
       filter(feature!="intron") %>%
       mutate(retained=FALSE)
+
     
-    transcripts_df <- AGI_df_coords %>%
-      filter(feature=="mRNA") %>%
-      mutate(feature="transcript",
-             feat_type="transcript",
-             feat_id="transcript1",
-             start=as.numeric(read_start),
-             end=as.numeric(read_end))
-    
-    
-    AGI_df_coords <-  bind_rows(AGI_df_coords, transcripts_df)
-    
+    AGI_df_coords <-  AGI_df_coords%>%
+      dplyr::select(all_of(c(cols_to_keep)))%>%
+      bind_rows(AGI_df_coords, transcripts_df)
+      
   } else {
     stop("something went wrong with introns")
   }
-  
   
   polya_df <- AGI_df_coords %>%
     filter(feature=="mRNA") %>%
@@ -132,8 +128,6 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
            feat_id="polyA_tail1",
            start=read_end+1,
            end=read_end +round(polya_length))
-  #end=as.numeric(read_end)+round(polya_length))
-  
   
   addtail_df <- AGI_df_coords %>%
     filter(feature=="mRNA") %>%

@@ -1,15 +1,28 @@
-source("global.R")
+#source("global.R")
+
+
+get_flepruns <- function(datasets_path) {
+  flep_runs <- list.dirs(datasets_path, recursive = F, full.names = T)
+  flep_runs_df <- as.data.frame(flep_runs) %>%
+    mutate(Run_bname = basename(flep_runs)) %>%
+    left_join(runs_infos, by=c("Run_bname"= "Run_name")) %>%
+    mutate(run_desc=
+             case_when(
+               !is.na(Run_infos) ~ paste(Run_bname, Run_infos, sep=":"),
+               TRUE ~ Run_bname))
+  return(flep_runs_df)
+  
+}
+
 #### SERVER ####
 
 # Sort file and tabix
 sort_and_tabix <- function(tail_f) {
   bgzip <- file.path(HTSLIB_PATH,"bgzip")
   tabix <- file.path(HTSLIB_PATH,"tabix")
-  print("TABIX")
   tail_f_sorted <- gsub(tail_ext, ".sorted.csv", tail_f)
   tabix_l_file <- gsub(tail_ext, tabix_l_ext, tail_f)
   tail_f_gz <- paste0(tail_f_sorted, ".gz")
-  print(tail_f_gz)
   sort_cmd=paste0("{ head -n 1 ",tail_f, " && tail -n +2 ", tail_f, " | sort -k",AGI_col," -k",start_col,"n,",end_col,"n; } > ", tail_f_sorted)
   tabix_cmd <- paste(bgzip, tail_f_sorted, "&&",  tabix, tail_f_gz, "-S 1 -s",AGI_col,"-b",start_col,"-e",end_col)
   
@@ -50,14 +63,11 @@ read_GFF_file <- function(gff, AGI) {
                                 feature=="exon" ~ "subgene"),
            ROI=paste0(seqnames, ":", start,"-", end))
   
-  print(head(dt))
   return(dt)
 }
 
 
 getIntronsRetained <- function(intron_name, retained_introns){
-  print(intron_name)
-  print(retained_introns)
   intron_name %in% paste0("intron",unlist(strsplit(retained_introns, ":")))
   
 }

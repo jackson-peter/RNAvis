@@ -16,6 +16,16 @@ get_flepruns <- function(datasets_path) {
 
 #### SERVER ####
 
+
+shinyInput <- function(FUN,id,num,...) {
+  inputs <- character(num)
+  for (i in seq_len(num)) {
+    inputs[i] <- as.character(FUN(paste0(id,i),label=NULL,...))
+  }
+  inputs
+}
+
+
 # Sort file and tabix
 sort_and_tabix <- function(tail_f) {
   bgzip <- file.path(HTSLIB_PATH,"bgzip")
@@ -50,7 +60,7 @@ check_if_tabixed <- function(tabix_file,tail_file, index=".tbi") {
 
 # Read only part of files containing users' AGI 
 read_tabixed_files <- function(file, AGI) {
-  dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, AGI, "-h"), header = F)
+  dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, AGI, "-h"), header = F) 
   return(dt)
 }
 
@@ -78,6 +88,7 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
     left_join(GFF_DF, by = c("mRNA"="AGI"), relationship = "many-to-many") %>%
     separate(read_core_id, into=c("read_id", "chr", "read_start", "read_end"), sep = ',' , remove = F, convert = T) %>%
     mutate(addtail_nchar =nchar(additional_tail))
+
   
   transcripts_df <- AGI_df_coords %>%
     filter(feature=="mRNA") %>%
@@ -112,7 +123,7 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
 
     
   } else  if (is.na(intron_cols)) {
-    cols_to_keep <- c("read_core_id", "mRNA", "retention_introns", "coords_in_read", "feat_id", "feature", "feat_type")
+    cols_to_keep <- c("read_core_id", "mRNA", "retention_introns", "coords_in_read", "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type")
 
     AGI_df_coords <- AGI_df_coords 
     AGI_df_coords <-  bind_rows(AGI_df_coords, transcripts_df)
@@ -122,10 +133,12 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
       filter(feature!="intron") %>%
       mutate(retained=FALSE)
 
-    
     AGI_df_coords <-  AGI_df_coords%>%
       dplyr::select(all_of(c(cols_to_keep)))%>%
       bind_rows(AGI_df_coords, transcripts_df)
+
+
+
       
   } else {
     stop("something went wrong with introns")
@@ -147,6 +160,8 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
            start=read_end +round(polya_length),
            end=case_when(!is.na(additional_tail) ~ read_end +round(polya_length)+addtail_nchar,
                          TRUE ~ read_end +round(polya_length)))
+  
+
   
   AGI_df_coords <-  bind_rows(AGI_df_coords, polya_df, addtail_df)%>%
     arrange(read_core_id, start, end)

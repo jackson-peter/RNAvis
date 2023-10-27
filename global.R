@@ -20,17 +20,9 @@ library(shinyBS)
 HTSLIB_PATH = "/biotools/htslib/1.9/bin/"
 
 datasets_path <- "/home/jpeter/ShinyApps/RNAvis/data/FLEPseq_runs"
-runs_infos <- fread("/home/jpeter/ShinyApps/RNAvis/data/Runs_infos.tsv", header=F, col.names=c("Run_name", "Run_infos")) 
-
-
+runs_infos <- read.table("/home/jpeter/ShinyApps/RNAvis/data/Runs_infos.tsv", col.names =c("Run_name", "Run_infos"), sep = '\t', fill=T) 
 
 flep_runs_df <- get_flepruns(datasets_path)
-
-
-#names(flep_runs) <- lapply(flep_runs, basename)
-
-  
-
 flep_runs <- setNames(flep_runs_df$flep_run, flep_runs_df$run_desc)
 
 ref_gff <- "/home/jpeter/DATA/ReferenceGenomes/Athaliana/Araport11/Araport11_GTF_genes_transposons.Jul2023.gtf"
@@ -49,5 +41,3 @@ tabix_l_ext=".list.tsv"
 AGI_col=4
 start_col=6
 end_col=7
-
-

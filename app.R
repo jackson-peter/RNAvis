@@ -3,16 +3,7 @@ source("global.R")
 
 theme_set(theme_bw())
 
-
-###
-# 1
-###
-#######################################################################################################################
-#######################################################################################################################
 ############################################       UI       ###########################################################
-#######################################################################################################################
-#######################################################################################################################
-
 # header ------
 header <- 
   dashboardHeader( title = HTML("RNAvis"),
@@ -26,7 +17,7 @@ header <-
                                          icon = icon("envelope"),
                                          href = "mailto:jackson.peter@ibmp-cnrs.unistra.fr"),
                                        icon = icon('comment'))
-                   )
+                   ) #/ dashboardheader
 
 # sidebar ------
 sidebar <-
@@ -40,6 +31,8 @@ sidebar <-
     ) #/ sidebarmenu
   ) #/ dashboardsidebar
 
+
+# body ------
 body <-
   dashboardBody(
   tags$head(includeCSS("www/custom.css")),
@@ -52,40 +45,39 @@ body <-
               box(width = 12, status = "primary", solidHeader = TRUE, title="Input files selector",
                   column(width=12, 
                          selectInput("selectdir", NULL, choices = c("Choose one" = "", flep_runs))), # input dir input field
+                  
+                  column(width=12,
+                         fluidRow(DTOutput("barcode_geno"))),
                   column(width=12,
                          selectizeInput("AGI", inputId = 'AGI', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE))),
                   column(width=3,
                          actionButton(inputId = "SubmitAGI", label = "Get table")),
                   column(width=12,
                          textOutput("rundir"),
+                         textOutput("genotypes"),
                          textOutput("agi")))
 
             ), 
-            # --- Inputs box
-            # recap of selected inputs ---
-            fluidRow(
-              box(width = 12, status = "primary", solidHeader = TRUE, title="Input files details", collapsible = T, collapsed = T,
-                  column(width=12, 
-                         fluidRow(dataTableOutput("barcode_geno")))
-              ), 
-              
-            ), 
-            # ---recap of selected inputs
             
             # plots about run
-            fluidRow(splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")))
+            fluidRow(box(width = 12, status = "primary", solidHeader = TRUE, title="Run mapping & Coverage", collapsible = T, collapsed=T,
+                         column(width=12, 
+                                splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")))))
             
     ), # /tabitem dashboard
     
     # Sidebar Tab Plots -----
     tabItem(tabName = "plots",
             fluidRow(
-              tabBox(title = "Plots",
-                     width = NULL,
-                     tabPanel(h5("READS"),uiOutput("plotreads.ui"))
-                     #tabPanel(h5("READS"),uiOutput("plotreads.ui")),
-                     ),
-            ),
+              box(width=12, status="primary", solidHeader = T, title="Intronic profile selection", collapsible=T, collapsed=F,
+                  column(width=12,
+                         uiOutput("checkbox_introns")))),
+            fluidRow(tabBox(title = "Plots",
+                            width = NULL,
+                            #h2()
+                            tabPanel(h5("Intron Retention"),uiOutput("plotreads.ui")))
+            )
+            
     ),
 
     # Sidebar Tab Tables -----
@@ -93,21 +85,22 @@ body <-
             fluidRow(
               tabBox(title = "Tables",
                      width=NULL,
-                     # Tab with GFF infos
-                     tabPanel(h5("Annotation"), dataTableOutput("GFF_table")),
+
                      # Tab with AGI table
                      tabPanel(h5("AGI infos"), 
                               fluidRow(
                                 selectizeInput('column_sel', NULL,choices=NULL, selected=NULL, multiple=T), # columns selector
                                 actionButton(inputId = "update",
                                              label = "Update columns"),
-                                checkboxInput("save_selection", "Only save selected columns?", value = FALSE, width = NULL),
+                                
                                 downloadButton("downloadData", "Download"),
                                 uiOutput("AGI_dt_t")
                                        
                               ) # /fluidRow
         
-                    ) # /tabPanel
+                    ), # /tabPanel
+                    # Tab with GFF infos
+                    tabPanel(h5("Annotation"), dataTableOutput("GFF_table"))
 
               ) # /tabbox
             ) #/ fluidrow
@@ -124,203 +117,12 @@ ui <- dashboardPage(skin="green",
   body
 )
 
-###
-# 2
-###
-#######################################################################################################################
-#######################################################################################################################
 ############################################       SERVER       #######################################################
-#######################################################################################################################
-#######################################################################################################################
+
 
 server <- function(input, output, session) {
   
   global <- reactiveValues(datapath = getwd())
-  
-  ### OUTPUTS ---
-  text_rundir <- reactiveVal('Please select a directory')
-  output$rundir <- renderText({text_rundir()}) #output$rundir
-  
-  text_agi <- reactiveVal('Please select a gene')
-  output$agi <- renderText({text_agi()}) #output$rundir
-  
-  output$barcode_geno <- renderDataTable(
-    global$barcode_corr,
-    options = list(scrollX = TRUE)
-  )
-  
-  output$GFF_table <- renderDataTable(
-    req(AGI_data()$GFF_DF)
-  )
-  
-  output$AGI_name <- renderText({
-    req(AGI_data())
-    title <- unique(AGI_data()$AGI_DF$mRNA)
-  })
-  
-  output$AGI_dt_t <- renderTable({
-    dt_render <- filtereddata()
-    validate(
-      need(nrow(dt_render) > 0, "No Data to show. Please check you provided a valid AGI.")
-    )
-    dt_render
-  })
-  
-  output$downloadData <- downloadHandler(
-    filename = function() {
-      # Use the selected dataset as the suggested file name
-      current_datetime <- now()
-      formatted_datetime <- format(current_datetime, format = "%Y%m%d_%H%M%S")
-      paste0(input$AGI, "_", formatted_datetime, ".tsv")
-    },
-    content = function(file) {
-      # Write the dataset to the `file` that will be downloaded
-      if (input$save_selection) {
-        write_tsv(filtereddata(), file)
-      }else {
-        write_tsv(AGI_data()$AGI_DF, file)
-      }
-    })
-  
-  
-  
-  output$coverage <- renderPlot({
-    req(MAP_data())
-    cov <- MAP_data() %>%
-      group_by(origin, rname) %>%
-      summarise(mean_cov=mean(coverage),
-                mean_mapq =mean(meanmapq))
-    ggplot(cov, aes(x=rname, y=mean_cov, fill=origin)) +
-      geom_col(position = "dodge") +
-      ggtitle("Mean coverage") +
-      theme(
-        legend.position = c(.05, .95),
-        legend.justification = c("left", "top"),
-        legend.box.just = "left",
-        legend.margin = margin(6, 6, 6, 6),
-        legend.background = element_rect(fill="white", size=0.5, linetype="solid", colour ="black")
-      )
-  })
-  
-  
-  output$mapq <- renderPlot({
-    req(MAP_data())
-    cov <- MAP_data() %>%
-      group_by(origin, rname) %>%
-      summarise(mean_cov=mean(coverage),
-                mean_mapq =mean(meanmapq))
-    ggplot(cov, aes(x=rname, y=mean_mapq, fill=origin)) +
-      geom_col(position = "dodge") +
-      ggtitle("Mean mapping quality")+
-      theme(legend.position = "none")
-  })
-  
-  output$plot_reads <- renderPlot({
-    req(AGI_data())
-    coords_df <- AGI_data()$COORDS_DF 
-    df_coords_gene <- coords_df %>% 
-      filter(feat_type=="gene") 
-    
-    df_coords_gene <- df_coords_gene[!duplicated(df_coords_gene$mRNA, df_coords_gene$retention_introns),]
-    
-    df_coords_subgene <- coords_df %>% filter(feat_type=="subgene") %>%
-      mutate(parent_start=unique(df_coords_gene$start),
-             parent_stop=unique(df_coords_gene$end))
-    
-    df_coords_tails <- coords_df %>% filter(feat_type=="tail") %>%
-      mutate(parent_start=unique(df_coords_gene$start),
-             parent_stop=unique(end))
-    
-    
-    df_coords_transcript <- coords_df %>% filter(feat_type=="transcript")
-    df_coords_transcript_subgene <- df_coords_subgene %>%
-      filter(start>=read_start,
-             end<=read_end)
-    
-    df_coords_transcript_subgene_tail <- rbind(df_coords_transcript_subgene, df_coords_tails)
-    
-    df_coords_transcript_subgene_tail$parent_start <- min(df_coords_transcript_subgene_tail$start, na.rm = T)
-    df_coords_transcript_subgene_tail$parent_stop <- max(df_coords_transcript_subgene_tail$end, na.rm=T)
-    
-    ggplot() +
-      # plot all transcripts
-      geom_gene_arrow(data=df_coords_transcript,
-                      aes(xmin = start, xmax = end, y = ID), arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
-      # and their sub elements
-      geom_subgene_arrow(data = df_coords_transcript_subgene_tail,
-                         #aes(xmin = parent_start, xmax = parent_stop, y = ID, fill = feature,
-                         aes(xmin = parent_start, xmax = parent_stop, y = ID, fill = feature,
-                             xsubmin = start, xsubmax = end), color="black", alpha=.4, arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
-      
-      # plot model gene...
-      geom_gene_arrow(data=df_coords_gene, 
-                      aes(xmin = start, xmax = end, y = -2), fill = "white", arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
-      # ...annotated
-      geom_subgene_arrow(data = df_coords_subgene,
-                         aes(xmin = parent_start, xmax = parent_stop, y = -2, fill = feature,
-                             xsubmin = start, xsubmax = end), color="black", arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
-      
-      facet_grid(origin~retention_introns) 
-  })
-  
-  
-  ploutCountRead <- reactive({
-    req(AGI_data())
-    return(nrow(AGI_data()$AGI_DF))
-  })
-  
-  plotHeight <- reactive(20 * ploutCountRead()) 
-  
-  output$plotreads.ui <- renderUI({
-    plotOutput("plot_reads", height = plotHeight())
-  })
-  
-  
-  ### --- OUTPUTS
-  
-  ### OBSERVERS ---
-  
-  # Observer for selectdir. 
-  observeEvent(ignoreNULL = TRUE,
-               eventExpr = {input$selectdir},
-               handlerExpr = {
-                 # Sets paths variables
-                 if (!input$selectdir == "") {
-                   text_rundir(paste("Selected directory:",input$selectdir, sep=" ")) # set new value to reactiveVal
-                   global$datapath <- input$selectdir
-                   
-                   tail_files <- list.files(path=file.path(global$datapath,tail_dir), pattern = paste0(tail_ext, "$"),full.names = T)
-                   barcode_file <- list.files(path=global$datapath, pattern=sample_table, full.names = T)
-                   mapping_files <- list.files(path=file.path(global$datapath,mapping_dir), pattern=paste0(mapping_ext, "$"), full.names=T)
-                   
-                   if (length(tail_files)>0) {
-                     global$barcode_corr <- fread(barcode_file, col.names = c("barcode", "genotype"), header = F) %>%
-                       mutate(tabix_file= file.path(global$datapath, tail_dir, paste0(barcode, index_ext)),
-                              tail_file=file.path(global$datapath, tail_dir, paste0(barcode, tail_ext)),
-                              map_file=file.path(global$datapath, mapping_dir, paste0(barcode, mapping_ext)),
-                              gene_list=file.path(global$datapath, tail_dir, paste0(barcode, tabix_l_ext)))
-                     
-                     
-                     # Check if files are tabixed, and tabix them if not
-                     apply(global$barcode_corr[,c('tabix_file','tail_file')], 1, function(y) check_if_tabixed(y['tabix_file'],y['tail_file']))
-                     tabix_files <- paste(basename(global$barcode_corr$tail_file), collapse='\n')
-                     shinyalert("Nice!", paste("Successfully added", tabix_files, sep="\n"), type = "success")
-                     genes_list=unique(rbindlist(lapply(global$barcode_corr$gene_list, fread, header=F)))
-                     updateSelectizeInput(session, 'AGI', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
-                     
-                   } 
-                 }
-               }) # end observer selectdir
-  
-  # Observer for AGI 
-  observeEvent(ignoreNULL = TRUE,
-               eventExpr = {input$AGI},
-               handlerExpr = {
-                 if (!input$selectdir == "") {
-                   text_agi(paste("Selected gene:",input$AGI, sep=" "))}
-               })
-  
-  ### --- OBSERVERS
   
   ### EventReactive (reactive DATASETS) ---
   
@@ -370,13 +172,25 @@ server <- function(input, output, session) {
     tabixed_list <- global$barcode_corr$tabix_file
     names(tabixed_list) <- global$barcode_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
-    AGI_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files, AGI=input$AGI), idcol = "origin")
+    AGI_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files, AGI=input$AGI), idcol = "origin") 
+    print("@@@@@@@@")
+    print(tabixed_list)
+    print(unique(AGI_DF$origin))
+    
+    
+    
+
     
     tryCatch(
       expr = {
-        
+
         colnames(AGI_DF) <- column_names
-        AGI_DF <- AGI_DF %>% mutate(Run=basename(global$datapath))
+        AGI_DF <- AGI_DF %>% 
+          mutate(Run=basename(global$datapath))%>%
+          mutate(across(retention_introns, as.character))%>%
+          mutate(retention_introns = replace_na(retention_introns, "none")) %>%
+          filter(origin %in% genoSelect())
+        
         n_introns <- unique(AGI_DF$mRNA_intron_num)
         
         
@@ -385,10 +199,13 @@ server <- function(input, output, session) {
           setDT(AGI_DF)
           AGI_DF <- AGI_DF[, paste(intron_cols) := lapply(paste(intron_cols), getIntronsRetained, retained_introns = as.character(retention_introns)), by = retention_introns]
           coords_df <- build_coords_df(AGI_DF, GFF_DF, intron_cols) 
+
           
         } else {
           coords_df <- build_coords_df(AGI_DF, GFF_DF, NA) 
         }
+        
+
         
         # Building coords df
         coords_df <- coords_df %>%
@@ -413,7 +230,7 @@ server <- function(input, output, session) {
   })
   
   # filters AGI_data with users' selection of columns
-  filtereddata <- eventReactive({
+  filteredcols <- eventReactive({
     input$update
     AGI_data()$AGI_DF
   },  {
@@ -426,13 +243,279 @@ server <- function(input, output, session) {
     } 
   })
   
+  filteredintron <- reactive({ 
+    
+    if (is.null(input$retention_introns)) {
+      return(NULL)
+    }  
+    
+    AGI_data()$COORDS_DF %>% filter(retention_introns %in% as.vector(input$retention_introns))
+    
+  })
+  
+  ### --- EventReactive 
+  
+  ### OBSERVERS ---
+  observe({
+    text_geno(unlist(genoSelect()))
+  })
+  
+  # Observer for selectdir. 
+  observeEvent(ignoreNULL = TRUE,
+               eventExpr = {input$selectdir},
+               handlerExpr = {
+                 # Sets paths variables
+                 if (!input$selectdir == "") {
+                   text_rundir(paste("Selected directory:",input$selectdir, sep=" ")) # set new value to reactiveVal
+                   global$datapath <- input$selectdir
+                   
+                   tail_files <- list.files(path=file.path(global$datapath,tail_dir), pattern = paste0(tail_ext, "$"),full.names = T)
+                   barcode_file <- list.files(path=global$datapath, pattern=sample_table, full.names = T)
+                   mapping_files <- list.files(path=file.path(global$datapath,mapping_dir), pattern=paste0(mapping_ext, "$"), full.names=T)
+                   
+                   if (length(tail_files)>0) {
+                     global$barcode_corr <- fread(barcode_file, col.names = c("barcode", "genotype"), header = F) %>%
+                       mutate(tabix_file= file.path(global$datapath, tail_dir, paste0(barcode, index_ext)),
+                              tail_file=file.path(global$datapath, tail_dir, paste0(barcode, tail_ext)),
+                              map_file=file.path(global$datapath, mapping_dir, paste0(barcode, mapping_ext)),
+                              gene_list=file.path(global$datapath, tail_dir, paste0(barcode, tabix_l_ext)))
+                     
+                     
+                     # Check if files are tabixed, and tabix them if not
+                     apply(global$barcode_corr[,c('tabix_file','tail_file')], 1, function(y) check_if_tabixed(y['tabix_file'],y['tail_file']))
+                     tabix_files <- paste(basename(global$barcode_corr$tail_file), collapse='\n')
+                     shinyalert("Nice!", paste("Successfully added", tabix_files, sep="\n"), type = "success")
+                     genes_list=unique(rbindlist(lapply(global$barcode_corr$gene_list, fread, header=F)))
+                     updateSelectizeInput(session, 'AGI', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
+                     
+                   } 
+                 }
+               }) # end observer selectdir
+  
+  # Observer for AGI 
+  observeEvent(ignoreNULL = TRUE,
+               eventExpr = {input$AGI},
+               handlerExpr = {
+                 if (!input$selectdir == "") {
+                   text_agi(paste("Selected gene:",input$AGI, sep=" "))
+                   
+                }
+               })
+  
+  ### --- OBSERVERS
+
+  
+  ### OUTPUTS ---
+  
+
+  output$checkbox_introns <- renderUI(radioButtons('retention_introns', 'Select Retention intron', choices =unique(AGI_data()$AGI_DF$retention_introns), inline = T))
+
+  text_rundir <- reactiveVal('Please select a directory')
+  output$rundir <- renderText({text_rundir()}) #output$rundir
+  
+  text_agi <- reactiveVal('Please select a gene')
+  output$agi <- renderText({text_agi()}) #output$agi
+  
+  text_geno <- reactiveVal('Please select genotypes')
+  output$genotypes <- renderText({text_geno()}) #output$geno
+  
+
+  output$barcode_geno = DT::renderDataTable({
+    req(global$barcode_corr$genotype)
+    #Display table with checkbox buttons
+    DT::datatable(cbind(Pick=shinyInput(checkboxInput,"srows_",length(global$barcode_corr$genotype),value=TRUE,width=1), global$barcode_corr),
+                  options = list(orderClasses = TRUE,
+                                 lengthMenu = c(5, 25, 50),
+                                 pageLength = 25 ,
+                                 
+                                 drawCallback= JS(
+                                   'function(settings) {
+                                     Shiny.bindAll(this.api().table().node());}')
+                  ),selection='none',escape=F)
+    
+    
+  })
+  observe({
+    text_geno(genoSelect() )
+  })
+  
+  genoSelect <- reactive({
+    rows=names(input)[grepl(pattern = "srows_",names(input))]
+
+
+    paste(unlist(lapply(rows,function(i){
+      if(input[[i]]==T){
+        index=as.numeric(substr(i,gregexpr(pattern = "_",i)[[1]]+1,nchar(i)))
+        #print(global$barcode_corr$genotype[index])
+
+        return(global$barcode_corr$genotype[index])
+      
+
+      }
+
+    
+    })))
+    
+  })
+  
+
   
   
-  ### --- EventReactive (reactive DATASETS)
+  output$GFF_table <- renderDataTable(
+    req(AGI_data()$GFF_DF)
+  )
+  
+  output$AGI_name <- renderText({
+    req(AGI_data())
+    title <- unique(AGI_data()$AGI_DF$mRNA)
+  })
+  
+  output$AGI_dt_t <- renderTable({
+    dt_render <- filteredcols()
+    validate(
+      need(nrow(dt_render) > 0, "No Data to show. Please check you provided a valid AGI.")
+    )
+    dt_render
+  })
+  
+  output$downloadData <- downloadHandler(
+    filename = function() {
+      # Use the selected dataset as the suggested file name
+      current_datetime <- now()
+      formatted_datetime <- format(current_datetime, format = "%Y%m%d_%H%M%S")
+      paste0(input$AGI, "_", formatted_datetime, ".tsv")
+    },
+    content = function(file) {
+      # Write the dataset to the `file` that will be downloaded
+      if (input$save_selection) {
+        write_tsv(filteredcol(), file)
+      }else {
+        write_tsv(AGI_data()$AGI_DF, file)
+      }
+    })
+  
+  
+  output$coverage <- renderPlot({
+    req(MAP_data())
+    cov <- MAP_data() %>%
+      group_by(origin, rname) %>%
+      summarise(mean_cov=mean(coverage),
+                mean_mapq =mean(meanmapq))
+    ggplot(cov, aes(x=rname, y=mean_cov, fill=origin)) +
+      geom_col(position = "dodge") +
+      ggtitle("Mean coverage") +
+      theme(
+        legend.position = c(.05, .95),
+        legend.justification = c("left", "top"),
+        legend.box.just = "left",
+        legend.margin = margin(6, 6, 6, 6),
+        legend.background = element_rect(fill="white", size=0.5, linetype="solid", colour ="black")
+      )
+  })
+  
+  
+  output$mapq <- renderPlot({
+    req(MAP_data())
+    cov <- MAP_data() %>%
+      group_by(origin, rname) %>%
+      summarise(mean_cov=mean(coverage),
+                mean_mapq =mean(meanmapq))
+    ggplot(cov, aes(x=rname, y=mean_mapq, fill=origin)) +
+      geom_col(position = "dodge") +
+      ggtitle("Mean mapping quality")+
+      theme(legend.position = "none")
+  })
 
+  output$plot_reads <- renderPlot({
+    req(AGI_data())
+    
 
-} #server
+    coords_df <- filteredintron()
+    validate(
+      need(!is.null(input$retention_introns), "Please select a data set")
+    )
 
+    df_coords_gene <- coords_df %>% 
+      filter(feat_type=="gene")
+    
+    genotypes <- unique(coords_df$origin)
+    gene_name <- unique(df_coords_gene$mRNA)
+
+    df_coords_gene <- df_coords_gene[!duplicated(df_coords_gene$mRNA, by=c("retention_introns", "origin")),]
+    df_coords_gene <- df_coords_gene[rep(seq_len(nrow(df_coords_gene)), each = length(genotypes)), ]
+    
+    df_coords_gene$origin=genotypes
+
+  
+    df_coords_subgene <- coords_df %>% filter(feat_type=="subgene") %>%
+      mutate(parent_start=unique(df_coords_gene$start),
+             parent_stop=unique(df_coords_gene$end))
+    
+    df_coords_tails <- coords_df %>% filter(feat_type=="tail") %>%
+      mutate(parent_start=unique(df_coords_gene$start),
+             parent_stop=unique(end))
+    
+    
+    df_coords_transcript <- coords_df %>% filter(feat_type=="transcript")
+    df_coords_transcript_subgene <- df_coords_subgene %>%
+      filter(start>=read_start,
+             end<=read_end)
+    
+    df_coords_transcript_subgene_tail <- rbind(df_coords_transcript_subgene, df_coords_tails)
+    
+    df_coords_transcript_subgene_tail$parent_start <- min(df_coords_transcript_subgene_tail$start, na.rm = T)
+    df_coords_transcript_subgene_tail$parent_stop <- max(df_coords_transcript_subgene_tail$end, na.rm=T)
+    #show_modal_spinner(spin = "fingerprint", text="Rendering plot") # show the modal window
+    ggplot() +
+      # plot all transcripts
+      geom_gene_arrow(data=df_coords_transcript,
+                      aes(xmin = start, xmax = end, y = -1*ID), arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
+      # and their sub elements
+      geom_subgene_arrow(data = df_coords_transcript_subgene_tail,
+                         #aes(xmin = parent_start, xmax = parent_stop, y = ID, fill = feature,
+                         aes(xmin = parent_start, xmax = parent_stop, y = -1*ID, fill = feature,
+                             xsubmin = start, xsubmax = end), color="black", alpha=.4, arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
+      
+      # plot model gene...
+      geom_gene_arrow(data=df_coords_gene, 
+                      aes(xmin = start, xmax = end, y = 1), fill = "white", arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
+      # ...annotated
+      geom_subgene_arrow(data = df_coords_subgene,
+                         aes(xmin = parent_start, xmax = parent_stop, y = 1, fill = feature,
+                             xsubmin = start, xsubmax = end), color="black", arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
+      
+      #facet_grid(origin~retention_introns)
+      facet_wrap(~origin) +
+      theme(legend.position="bottom") +
+      theme(legend.background = element_rect(size=0.5, linetype="solid")) +
+      ggtitle(gene_name)
+    
+    #remove_modal_spinner() # remove it when done
+  })
+  
+  
+  plotCountRead <- reactive({
+    req(filteredintron())
+    sum <- filteredintron() %>% 
+      group_by(origin) %>%
+      summarise(n_read=n())
+    return(max(sum$n_read))
+  })
+  
+  plotHeight <- reactive(3 * plotCountRead()) 
+  
+  output$plotreads.ui <- renderUI({
+    plotOutput("plot_reads", height = plotHeight())
+  })
+  
+  
+  ### --- OUTPUTS
+  
+  
+
+} # /server
+
+#######################################################################
 ### App calling       
 shinyApp(ui, server)
 

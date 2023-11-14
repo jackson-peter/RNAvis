@@ -83,13 +83,14 @@ getIntronsRetained <- function(intron_name, retained_introns){
 }
 
 build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
-  
+
   AGI_df_coords <- AGI_df  %>%
     left_join(GFF_DF, by = c("mRNA"="AGI"), relationship = "many-to-many") %>%
     separate(read_core_id, into=c("read_id", "chr", "read_start", "read_end"), sep = ',' , remove = F, convert = T) %>%
     mutate(addtail_nchar =nchar(additional_tail))
-
+  AGI_df_coords$orientation=unique(GFF_DF$orientation)
   
+
   transcripts_df <- AGI_df_coords %>%
     filter(feature=="mRNA") %>%
     mutate(feature="transcript",
@@ -100,7 +101,7 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
   
   if (!is.na(intron_cols)) {
 
-    cols_to_keep <- c(intron_cols, "read_core_id", "mRNA", "retention_introns", "coords_in_read",  "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type")
+    cols_to_keep <- c(intron_cols,"orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read",  "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type")
 
     # This data frame looks for the values of feat_id that are also column names (intron1 intron2 ...)
     # and checks whether it is retained or not.
@@ -117,13 +118,12 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
 
     AGI_df_coords <- AGI_df_coords %>%dplyr::select(all_of(c(cols_to_keep)))%>%
       bind_rows(AGI_df_coords, to_rem, transcripts_df)%>%
-      
       dplyr::select(-c(intron_cols))
     
 
     
   } else  if (is.na(intron_cols)) {
-    cols_to_keep <- c("read_core_id", "mRNA", "retention_introns", "coords_in_read", "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type")
+    cols_to_keep <- c("orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read", "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type")
 
     AGI_df_coords <- AGI_df_coords 
     AGI_df_coords <-  bind_rows(AGI_df_coords, transcripts_df)
@@ -149,18 +149,22 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
     mutate(feature="polyA_tail",
            feat_type="tail",
            feat_id="polyA_tail1",
-           start=read_end+1,
-           end=read_end +round(polya_length))
+           start=case_when(orientation==1 ~ read_end+1,
+                           orientation==0 ~ read_start-1),
+           end= case_when(orientation==1 ~ read_end+ round(polya_length),
+                          orientation==0 ~ read_start -round(polya_length)))
   
   addtail_df <- AGI_df_coords %>%
     filter(feature=="mRNA") %>%
     mutate(feature="add_tail",
            feat_type="tail",
            feat_id="add_tail1",
-           start=read_end +round(polya_length),
-           end=case_when(!is.na(additional_tail) ~ read_end +round(polya_length)+addtail_nchar,
-                         TRUE ~ read_end +round(polya_length)))
-  
+           start=case_when(orientation==1 ~ read_end +round(polya_length),
+                           orientation==0 ~ read_start -round(polya_length)),
+           end=case_when(orientation==1 & !is.na(additional_tail) ~ read_end +round(polya_length)+addtail_nchar,
+                         orientation==1 & is.na(additional_tail) ~ read_end + round(polya_length),
+                         orientation==0 & !is.na(additional_tail) ~ read_start - round(polya_length) - addtail_nchar,
+                         orientation==0 & is.na(additional_tail) ~ read_start - round(polya_length)))
 
   
   AGI_df_coords <-  bind_rows(AGI_df_coords, polya_df, addtail_df)%>%

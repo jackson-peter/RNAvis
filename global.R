@@ -16,6 +16,7 @@ library(cowplot)
 library(gggenes)
 library(GenomicRanges)
 library(shinyBS)
+library(DT)
 
 HTSLIB_PATH = "/biotools/htslib/1.9/bin/"
 

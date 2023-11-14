@@ -93,8 +93,8 @@ body <-
                                 actionButton(inputId = "update",
                                              label = "Update columns"),
                                 
-                                downloadButton("downloadData", "Download"),
-                                uiOutput("AGI_dt_t")
+                                DTOutput("AGI_dt_t", height = "auto", fill = T)
+                                #uiOutput("AGI_dt_t")
                                        
                               ) # /fluidRow
         
@@ -158,7 +158,8 @@ server <- function(input, output, session) {
       GFF_DF <- rbind(gff_infos, introns_regions, fill=T) %>%
         group_by(feature) %>%
         mutate(AGI=input$AGI,
-               feat_id=paste0(feature, seq_along(feature)))%>%
+               feat_id=case_when(orientation==0 ~paste0(feature, rev(seq_along(feature))),
+                                 orientation==1 ~paste0(feature, seq_along(feature))))%>%
         arrange(start)
     } else {
       GFF_DF <- gff_infos %>%
@@ -173,14 +174,7 @@ server <- function(input, output, session) {
     names(tabixed_list) <- global$barcode_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
     AGI_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files, AGI=input$AGI), idcol = "origin") 
-    print("@@@@@@@@")
-    print(tabixed_list)
-    print(unique(AGI_DF$origin))
-    
-    
-    
 
-    
     tryCatch(
       expr = {
 
@@ -209,10 +203,9 @@ server <- function(input, output, session) {
         
         # Building coords df
         coords_df <- coords_df %>%
-          group_by( chr, read_start, read_end, retention_introns, polya_length, additional_tail) %>%
-          arrange(read_end-read_start,retention_introns, polya_length, str_length(additional_tail)) %>%
+          group_by(read_id, origin, chr, read_start, read_end, retention_introns, polya_length, additional_tail) %>%
+          arrange(retention_introns, read_end-read_start, polya_length, str_length(additional_tail)) %>%
           mutate(ID = cur_group_id())
-        
         updateSelectizeInput(session, "column_sel", choices=colnames(AGI_DF))
         
       },
@@ -230,16 +223,12 @@ server <- function(input, output, session) {
   })
   
   # filters AGI_data with users' selection of columns
-  filteredcols <- eventReactive({
-    input$update
-    AGI_data()$AGI_DF
-  },  {
+  filteredcols <- eventReactive({input$update},{
     req(AGI_data())
     if (is.null(input$column_sel) || input$column_sel == "") {
-      AGI_data()$AGI_DF
+      return(AGI_data()$AGI_DF)
     } else {
-      
-      AGI_data()$AGI_DF[ ,colnames(AGI_data()$AGI_DF) %in% input$column_sel, with=FALSE]
+      return(AGI_data()$AGI_DF[ ,colnames(AGI_data()$AGI_DF) %in% input$column_sel, with=FALSE])
     } 
   })
   
@@ -248,9 +237,16 @@ server <- function(input, output, session) {
     if (is.null(input$retention_introns)) {
       return(NULL)
     }  
-    
-    AGI_data()$COORDS_DF %>% filter(retention_introns %in% as.vector(input$retention_introns))
-    
+    print(input$retention_introns)
+    write_tsv(AGI_data()$COORDS_DF, "~/DATA/test_intron.tsv")
+    filtered_df<- AGI_data()$COORDS_DF %>% 
+      filter(retention_introns %in% as.vector(input$retention_introns)) %>%
+      arrange(origin) %>%
+      group_by(ID, origin)
+
+    return(filtered_df)
+
+
   })
   
   ### --- EventReactive 
@@ -370,30 +366,47 @@ server <- function(input, output, session) {
     title <- unique(AGI_data()$AGI_DF$mRNA)
   })
   
-  output$AGI_dt_t <- renderTable({
-    dt_render <- filteredcols()
-    validate(
-      need(nrow(dt_render) > 0, "No Data to show. Please check you provided a valid AGI.")
-    )
-    dt_render
-  })
+  # output$AGI_dt_t <- renderDT({
+  #   dt_render <- filteredcols()
+  #   validate(
+  #     need(nrow(dt_render) > 0, "No Data to show. Please check you provided a valid AGI.")
+  #   )
+  #   dt_render
+  # })
   
-  output$downloadData <- downloadHandler(
-    filename = function() {
-      # Use the selected dataset as the suggested file name
-      current_datetime <- now()
-      formatted_datetime <- format(current_datetime, format = "%Y%m%d_%H%M%S")
-      paste0(input$AGI, "_", formatted_datetime, ".tsv")
-    },
-    content = function(file) {
-      # Write the dataset to the `file` that will be downloaded
-      if (input$save_selection) {
-        write_tsv(filteredcol(), file)
-      }else {
-        write_tsv(AGI_data()$AGI_DF, file)
-      }
-    })
-  
+  output$AGI_dt_t <- renderDT({
+    
+    req(AGI_data())
+    if (is.null(input$column_sel) || input$column_sel == "") {
+      dt_render <- AGI_data()$AGI_DF
+    } else {
+      dt_render <- filteredcols()
+    }
+    
+    #saveRDS(object = aa.dt(), file = "debugging/aa_dt.rds")
+    nlines <- nrow(dt_render)
+    current_datetime <- now()
+    formatted_datetime <- format(current_datetime, format = "%Y%m%d_%H%M%S")
+    outfile <- paste0(input$AGI, "_", formatted_datetime, ".tsv")
+    datatable(dt_render, 
+              caption = NULL,
+              rownames = FALSE, 
+              options = list(dom = "Bfrtip", 
+                             pageLength = nlines,
+                             #deferRender = TRUE,
+                             #scrollY = 400,
+                             #scroller = TRUE,
+                             buttons = list(list(extend = "copy", header = TRUE, title = NULL), 
+                                            list(extend = "csv", header = TRUE, filename = outfile))
+                             
+              ), 
+              
+              extensions = c("Buttons", "Scroller"),
+              
+              fillContainer = T)
+
+    
+  }, server = FALSE)
   
   output$coverage <- renderPlot({
     req(MAP_data())
@@ -434,29 +447,42 @@ server <- function(input, output, session) {
     validate(
       need(!is.null(input$retention_introns), "Please select a data set")
     )
+    
+    
+    print(unique(coords_df$orientation))
+
 
     df_coords_gene <- coords_df %>% 
       filter(feat_type=="gene")
     
     genotypes <- unique(coords_df$origin)
     gene_name <- unique(df_coords_gene$mRNA)
+    
+    
 
     df_coords_gene <- df_coords_gene[!duplicated(df_coords_gene$mRNA, by=c("retention_introns", "origin")),]
     df_coords_gene <- df_coords_gene[rep(seq_len(nrow(df_coords_gene)), each = length(genotypes)), ]
     
     df_coords_gene$origin=genotypes
-
-  
+    
     df_coords_subgene <- coords_df %>% filter(feat_type=="subgene") %>%
       mutate(parent_start=unique(df_coords_gene$start),
              parent_stop=unique(df_coords_gene$end))
+
     
     df_coords_tails <- coords_df %>% filter(feat_type=="tail") %>%
       mutate(parent_start=unique(df_coords_gene$start),
              parent_stop=unique(end))
     
+    # df_coords_tails <- coords_df %>% filter(feat_type=="tail") %>%
+    #   mutate(parent_start= case_when(orientation==1 ~ unique(df_coords_gene$start),
+    #                                  orientation==0 ~ unique(df_coords_gene$end)),
+    #          parent_stop= case_when(orientation==1 ~ unique(end),
+    #                                 orientation==0 ~unique(start)))
     
-    df_coords_transcript <- coords_df %>% filter(feat_type=="transcript")
+    df_coords_transcript <- coords_df %>% 
+      filter(feat_type=="transcript") 
+    
     df_coords_transcript_subgene <- df_coords_subgene %>%
       filter(start>=read_start,
              end<=read_end)
@@ -465,30 +491,37 @@ server <- function(input, output, session) {
     
     df_coords_transcript_subgene_tail$parent_start <- min(df_coords_transcript_subgene_tail$start, na.rm = T)
     df_coords_transcript_subgene_tail$parent_stop <- max(df_coords_transcript_subgene_tail$end, na.rm=T)
+
+    
+    
     #show_modal_spinner(spin = "fingerprint", text="Rendering plot") # show the modal window
+    limy_df <- df_coords_transcript %>%
+      group_by(origin) %>%
+      summarise(nb_ID = n_distinct(ID))
+    
     ggplot() +
       # plot all transcripts
       geom_gene_arrow(data=df_coords_transcript,
-                      aes(xmin = start, xmax = end, y = -1*ID), arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
+                      aes(xmin = start, xmax = end, y = -1*ID, forward=orientation), arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
       # and their sub elements
       geom_subgene_arrow(data = df_coords_transcript_subgene_tail,
                          #aes(xmin = parent_start, xmax = parent_stop, y = ID, fill = feature,
-                         aes(xmin = parent_start, xmax = parent_stop, y = -1*ID, fill = feature,
+                         aes(xmin = parent_start, xmax = parent_stop, y = -1*ID,forward=orientation, fill = feature,
                              xsubmin = start, xsubmax = end), color="black", alpha=.4, arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
       
       # plot model gene...
       geom_gene_arrow(data=df_coords_gene, 
-                      aes(xmin = start, xmax = end, y = 1), fill = "white", arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
+                      aes(xmin = start, xmax = end, y = 1,forward=orientation), fill = "white", arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
       # ...annotated
       geom_subgene_arrow(data = df_coords_subgene,
-                         aes(xmin = parent_start, xmax = parent_stop, y = 1, fill = feature,
+                         aes(xmin = parent_start, xmax = parent_stop, y = 1, forward=orientation, fill = feature,
                              xsubmin = start, xsubmax = end), color="black", arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
       
       #facet_grid(origin~retention_introns)
-      facet_wrap(~origin) +
+      facet_wrap(~origin, ncol = 1) +
       theme(legend.position="bottom") +
       theme(legend.background = element_rect(size=0.5, linetype="solid")) +
-      ggtitle(gene_name)
+      ggtitle(gene_name) 
     
     #remove_modal_spinner() # remove it when done
   })
@@ -499,10 +532,11 @@ server <- function(input, output, session) {
     sum <- filteredintron() %>% 
       group_by(origin) %>%
       summarise(n_read=n())
+
     return(max(sum$n_read))
   })
   
-  plotHeight <- reactive(3 * plotCountRead()) 
+  plotHeight <- reactive(10*plotCountRead()) 
   
   output$plotreads.ui <- renderUI({
     plotOutput("plot_reads", height = plotHeight())

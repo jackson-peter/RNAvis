@@ -24,8 +24,8 @@ sidebar <-
   dashboardSidebar(
     hr(),
     sidebarMenu(id = "tabs",
-                menuItem("Main Dashboard", tabName = 'dashboard', icon = icon('dashboard', selected=TRUE)),
-                menuItem("Plots", tabName = "plots", icon=icon("line-chart")),
+                menuItem("Input Selection", tabName = 'dashboard', icon = icon('dashboard', selected=TRUE)),
+                menuItem("AGI-Specific Plots", tabName = "plots", icon=icon("line-chart")),
                 menuItem("Tables", tabName = "tables", icon=icon("table"))
                 
     ) #/ sidebarmenu
@@ -42,39 +42,45 @@ body <-
     tabItem(tabName = "dashboard", 
             # Inputs box ---
             fluidRow(
-              box(width = 12, status = "primary", solidHeader = TRUE, title="Input files selector",
+              box(width = 12, status = "primary", solidHeader = TRUE, title="chose a FLEPseq run",
                   column(width=12, 
-                         selectInput("selectdir", NULL, choices = c("Choose one" = "", flep_runs))), # input dir input field
+                         selectInput("selectdir", NULL, choices = c("Choose one" = "", flep_runs))
+                         ), # input dir input field
                   
                   column(width=12,
                          fluidRow(DTOutput("barcode_geno"))),
-                  column(width=12,
-                         selectizeInput("AGI", inputId = 'AGI', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE))),
-                  column(width=3,
-                         actionButton(inputId = "SubmitAGI", label = "Validate Parameters")),
+                  
                   column(width=12,
                          textOutput("rundir"),
-                         textOutput("genotypes"),
-                         textOutput("agi"),
-                         textOutput("nb_reads")))
+                         textOutput("genotypes"))
+                  )# /box
 
-            )
+            ), #/fluidRow
+            # plots about run
+            fluidRow(
+              box(width = 12, status = "primary", solidHeader = TRUE, title="Run mapping & Coverage", collapsible = T, collapsed=T,
+                  column(width=12, 
+                         splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")))
+              ) #/ box
+            ) #/ fluidRow
             
             
     ), # /tabitem dashboard
     
     # Sidebar Tab Plots -----
     tabItem(tabName = "plots",
-            fluidRow(tabBox(title = "Plots",
+            fluidRow(tabBox(title = "AGI specific Plots",
                             width = NULL,
-                            tabPanel(h5("Run Infos"),
-                                     # plots about run
-                                     fluidRow(
-                                       box(width = 12, status = "primary", solidHeader = TRUE, title="Run mapping & Coverage", collapsible = T, collapsed=F,
-                                                  column(width=12, 
-                                                         splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")))
-                                           ) #/ box
-                                       ) #/ fluidRow
+                            
+                            tabPanel(h5("AGI Selector"),
+                                     box(width = 12, status = "primary", solidHeader = TRUE, title="Input files selector",
+                                         column(width=12,
+                                                selectizeInput("AGI", inputId = 'AGI', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE))),
+                                         column(width=3,
+                                                actionButton(inputId = "SubmitAGI", label = "Validate Parameters")),
+                                         column(width=12,
+                                                textOutput("agi"))
+                                         ),# /box
                                      ),
                             tabPanel(h5("Intron Retention"),
                                      fluidRow(
@@ -88,7 +94,9 @@ body <-
                             ) # / tabbox
             ) #/ fluidRow
             
-    ),
+    ), #/ tabitem
+    
+    
 
     # Sidebar Tab Tables -----
     tabItem(tabName="tables",

@@ -51,32 +51,42 @@ body <-
                   column(width=12,
                          selectizeInput("AGI", inputId = 'AGI', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE))),
                   column(width=3,
-                         actionButton(inputId = "SubmitAGI", label = "Get table")),
+                         actionButton(inputId = "SubmitAGI", label = "Validate Parameters")),
                   column(width=12,
                          textOutput("rundir"),
                          textOutput("genotypes"),
-                         textOutput("agi")))
+                         textOutput("agi"),
+                         textOutput("nb_reads")))
 
-            ), 
+            )
             
-            # plots about run
-            fluidRow(box(width = 12, status = "primary", solidHeader = TRUE, title="Run mapping & Coverage", collapsible = T, collapsed=T,
-                         column(width=12, 
-                                splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")))))
             
     ), # /tabitem dashboard
     
     # Sidebar Tab Plots -----
     tabItem(tabName = "plots",
-            fluidRow(
-              box(width=12, status="primary", solidHeader = T, title="Intronic profile selection", collapsible=T, collapsed=F,
-                  column(width=12,
-                         uiOutput("checkbox_introns")))),
             fluidRow(tabBox(title = "Plots",
                             width = NULL,
-                            #h2()
-                            tabPanel(h5("Intron Retention"),uiOutput("plotreads.ui")))
-            )
+                            tabPanel(h5("Run Infos"),
+                                     # plots about run
+                                     fluidRow(
+                                       box(width = 12, status = "primary", solidHeader = TRUE, title="Run mapping & Coverage", collapsible = T, collapsed=F,
+                                                  column(width=12, 
+                                                         splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")))
+                                           ) #/ box
+                                       ) #/ fluidRow
+                                     ),
+                            tabPanel(h5("Intron Retention"),
+                                     fluidRow(
+                                       box(width=12, status="primary", solidHeader = T, title="Intronic profile selection", collapsible=T, collapsed=F,
+                                         column(width=12,
+                                                uiOutput("checkbox_introns"))
+                                         ) # /box
+                                     ), #/ fluidRow
+                                     uiOutput("plotreads.ui")),
+                            tabPanel(h5("PolyA Site"),plotOutput("plot_polyA_site"))
+                            ) # / tabbox
+            ) #/ fluidRow
             
     ),
 
@@ -99,6 +109,7 @@ body <-
                               ) # /fluidRow
         
                     ), # /tabPanel
+
                     # Tab with GFF infos
                     tabPanel(h5("Annotation"), dataTableOutput("GFF_table"))
 
@@ -121,6 +132,10 @@ ui <- dashboardPage(skin="green",
 
 
 server <- function(input, output, session) {
+  # This function stops the execution and fixes the bug requiring R termination when closing app
+  session$onSessionEnded(function() {
+    stopApp()
+  })
   
   global <- reactiveValues(datapath = getwd())
   
@@ -198,15 +213,14 @@ server <- function(input, output, session) {
         } else {
           coords_df <- build_coords_df(AGI_DF, GFF_DF, NA) 
         }
-        
 
-        
         # Building coords df
         coords_df <- coords_df %>%
           group_by(read_id, origin, chr, read_start, read_end, retention_introns, polya_length, additional_tail) %>%
           arrange(retention_introns, read_end-read_start, polya_length, str_length(additional_tail)) %>%
           mutate(ID = cur_group_id())
         updateSelectizeInput(session, "column_sel", choices=colnames(AGI_DF))
+      
         
       },
       error = function(e){ 
@@ -237,8 +251,7 @@ server <- function(input, output, session) {
     if (is.null(input$retention_introns)) {
       return(NULL)
     }  
-    print(input$retention_introns)
-    write_tsv(AGI_data()$COORDS_DF, "~/DATA/test_intron.tsv")
+
     filtered_df<- AGI_data()$COORDS_DF %>% 
       filter(retention_introns %in% as.vector(input$retention_introns)) %>%
       arrange(origin) %>%
@@ -298,6 +311,7 @@ server <- function(input, output, session) {
                 }
                })
   
+  
   ### --- OBSERVERS
 
   
@@ -315,7 +329,6 @@ server <- function(input, output, session) {
   text_geno <- reactiveVal('Please select genotypes')
   output$genotypes <- renderText({text_geno()}) #output$geno
   
-
   output$barcode_geno = DT::renderDataTable({
     req(global$barcode_corr$genotype)
     #Display table with checkbox buttons
@@ -331,6 +344,7 @@ server <- function(input, output, session) {
     
     
   })
+  
   observe({
     text_geno(genoSelect() )
   })
@@ -345,15 +359,10 @@ server <- function(input, output, session) {
         #print(global$barcode_corr$genotype[index])
 
         return(global$barcode_corr$genotype[index])
-      
-
       }
-
-    
     })))
     
   })
-  
 
   
   
@@ -366,14 +375,7 @@ server <- function(input, output, session) {
     title <- unique(AGI_data()$AGI_DF$mRNA)
   })
   
-  # output$AGI_dt_t <- renderDT({
-  #   dt_render <- filteredcols()
-  #   validate(
-  #     need(nrow(dt_render) > 0, "No Data to show. Please check you provided a valid AGI.")
-  #   )
-  #   dt_render
-  # })
-  
+
   output$AGI_dt_t <- renderDT({
     
     req(AGI_data())
@@ -442,24 +444,15 @@ server <- function(input, output, session) {
   output$plot_reads <- renderPlot({
     req(AGI_data())
     
-
     coords_df <- filteredintron()
-    validate(
-      need(!is.null(input$retention_introns), "Please select a data set")
-    )
+    validate(need(!is.null(input$retention_introns), "Please select a data set"))
     
-    
-    print(unique(coords_df$orientation))
-
-
     df_coords_gene <- coords_df %>% 
       filter(feat_type=="gene")
     
     genotypes <- unique(coords_df$origin)
     gene_name <- unique(df_coords_gene$mRNA)
     
-    
-
     df_coords_gene <- df_coords_gene[!duplicated(df_coords_gene$mRNA, by=c("retention_introns", "origin")),]
     df_coords_gene <- df_coords_gene[rep(seq_len(nrow(df_coords_gene)), each = length(genotypes)), ]
     
@@ -469,16 +462,9 @@ server <- function(input, output, session) {
       mutate(parent_start=unique(df_coords_gene$start),
              parent_stop=unique(df_coords_gene$end))
 
-    
     df_coords_tails <- coords_df %>% filter(feat_type=="tail") %>%
       mutate(parent_start=unique(df_coords_gene$start),
              parent_stop=unique(end))
-    
-    # df_coords_tails <- coords_df %>% filter(feat_type=="tail") %>%
-    #   mutate(parent_start= case_when(orientation==1 ~ unique(df_coords_gene$start),
-    #                                  orientation==0 ~ unique(df_coords_gene$end)),
-    #          parent_stop= case_when(orientation==1 ~ unique(end),
-    #                                 orientation==0 ~unique(start)))
     
     df_coords_transcript <- coords_df %>% 
       filter(feat_type=="transcript") 
@@ -491,8 +477,6 @@ server <- function(input, output, session) {
     
     df_coords_transcript_subgene_tail$parent_start <- min(df_coords_transcript_subgene_tail$start, na.rm = T)
     df_coords_transcript_subgene_tail$parent_stop <- max(df_coords_transcript_subgene_tail$end, na.rm=T)
-
-    
     
     #show_modal_spinner(spin = "fingerprint", text="Rendering plot") # show the modal window
     limy_df <- df_coords_transcript %>%
@@ -540,6 +524,26 @@ server <- function(input, output, session) {
   
   output$plotreads.ui <- renderUI({
     plotOutput("plot_reads", height = plotHeight())
+  })
+  
+  output$plot_polyA_site <- renderPlot({
+    req(AGI_data())
+    coords_df <- AGI_data()$COORDS_DF %>% 
+      group_by(polya_start_base, polya_length, origin) %>%
+      summarise(n=n())
+    #ggplot(coords_df, aes(x=polya_start_base, y=round(polya_length), size=n)) +
+    #  geom_point(aes(colour = factor(origin)))
+
+    
+    ggplot(coords_df, aes(round(polya_length), polya_start_base)) + 
+      geom_tile(aes(fill = n)) + 
+      geom_text(aes(label = n), 
+                size = 3) + 
+      coord_fixed() + 
+      scale_fill_viridis_c() + 
+      guides(fill = FALSE) +
+      scale_color_viridis_c()
+    
   })
   
   

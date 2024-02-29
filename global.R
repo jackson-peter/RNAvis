@@ -18,16 +18,15 @@ library(GenomicRanges)
 library(shinyBS)
 library(DT)
 
+HTSLIB_PATH = "/shared/biotools/htslib/1.18/bin/"
 
-HTSLIB_PATH = "/biotools/htslib/1.9/bin/"
-
-datasets_path <- "/home/jpeter/ShinyApps/RNAvis/data/FLEPseq_runs"
-runs_infos <- read.table("/home/jpeter/ShinyApps/RNAvis/data/Runs_infos.tsv", col.names =c("Run_name", "Run_infos"), sep = '\t', fill=T) 
+datasets_path <- "/shared/home/jpeter/ShinyApps/RNAvis/data/FLEPseq_runs"
+runs_infos <- read.table("/shared/home/jpeter/ShinyApps/RNAvis/data/Runs_infos.tsv", col.names =c("Run_name", "Run_infos"), sep = '\t', fill=T) 
 
 flep_runs_df <- get_flepruns(datasets_path)
 flep_runs <- setNames(flep_runs_df$flep_run, flep_runs_df$run_desc)
 
-ref_gff <- "/home/jpeter/DATA/ReferenceGenomes/Athaliana/Araport11/Araport11_GTF_genes_transposons.Jul2023.gtf"
+ref_gff <- "/shared/home/jpeter/Data/ReferenceGenomes/A_thaliana/Araport11/Araport11_GTF_genes_transposons.current.gtf"
 gff_colnames <- c("seqnames", "source", "feature", "start", "end", "score", "strand", "frame", "attributes")
 
 mapping_dir="2_Mapping"

@@ -28,6 +28,7 @@ shinyInput <- function(FUN,id,num,...) {
 
 # Sort file and tabix
 sort_and_tabix <- function(tail_f) {
+  # path to softs
   bgzip <- file.path(HTSLIB_PATH,"bgzip")
   tabix <- file.path(HTSLIB_PATH,"tabix")
   tail_f_sorted <- gsub(tail_ext, ".sorted.csv", tail_f)
@@ -59,18 +60,29 @@ check_if_tabixed <- function(tabix_file,tail_file, index=".tbi") {
 }
 
 # Read only part of files containing users' AGI 
-read_tabixed_files <- function(file, AGI) {
-  dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, AGI, "-h"), header = F) 
+read_tabixed_files_single_region <- function(file, AGI) {
+  dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, AGI, "-h"), header = F)
   return(dt)
-}
+  }
+   
+  
+
+
+# Read only part of files containing users' AGI 
+read_tabixed_files_multiple_regions <- function(file, AGIs) {
+  AGIs_string <- paste(unique(unlist(strsplit(AGIs, "\n"))), collapse = " ")
+
+  dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, AGIs_string, "-h"), header = F)
+  }
 
 # Read GFF file for specified AGI
 read_GFF_file <- function(gff, AGI) {
+  #dt <- fread(cmd = paste("grep", AGI, gff, "| grep -P 'mRNA|exon|five_prime_UTR|three_prime_UTR'"), col.names = gff_colnames) %>%
   dt <- fread(cmd = paste("grep", AGI, gff, "| grep -P 'mRNA|exon'"), col.names = gff_colnames) %>%
     mutate(orientation=case_when(strand=='-' ~ 0,
                                  strand=='+' ~ 1),
            feat_type =case_when(feature=="mRNA" ~ "gene",
-                                feature=="exon" ~ "subgene"),
+                                TRUE ~ "subgene"),
            ROI=paste0(seqnames, ":", start,"-", end))
   
   return(dt)
@@ -99,7 +111,7 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
            start=as.numeric(read_start),
            end=as.numeric(read_end))
   
-  if (!is.na(intron_cols)) {
+  if (length(intron_cols)>0) {
 
     cols_to_keep <- c(intron_cols,"orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read",  "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type")
 
@@ -170,7 +182,7 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
   AGI_df_coords <-  bind_rows(AGI_df_coords, polya_df, addtail_df)%>%
     arrange(read_core_id, start, end)
   
-  write_tsv(AGI_df_coords, "~/DATA/testAGI.tsv")
+  #write_tsv(AGI_df_coords, "~/Data/testAGI.tsv")
   
   return(AGI_df_coords)
   

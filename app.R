@@ -24,9 +24,9 @@ sidebar <-
   dashboardSidebar(
     hr(),
     sidebarMenu(id = "tabs",
-                menuItem("Run Selection", tabName = 'runtab', icon = icon('dashboard', selected=TRUE)),
-                menuItem("AGI-Specific", tabName = "AGIspecific", icon=icon("line-chart")),
-                menuItem("AGI List", tabName = "AGIlist", icon=icon("line-chart"))
+                menuItem("Run Selection", tabName = 'runTab', icon = icon('dashboard', selected=TRUE)),
+                menuItem("Transcript-Specific", tabName = "transcriptSpecificTab", icon=icon("line-chart")),
+                menuItem("Transcripts List", tabName = "transcriptsListTab", icon=icon("line-chart"))
                 #menuItem("ReadMe", tabName = "readme", icon=icon("mortar-board")),
                 #menuItem("About", tabName = "about", icon = icon("question"))
                 
@@ -41,127 +41,85 @@ body <-
   # Sidebar Tab Main dashboard -----
   tabItems(
     # sidebar Tab: run selector
-    tabItem(tabName = "runtab", 
+    tabItem(tabName = "runTab", 
             # Inputs box ---
-            fluidRow(
-              box(width = 12, status = "primary", solidHeader = TRUE, title="chose a FLEPseq run",
-                  column(width=12, 
-                         selectInput("selectdir", NULL, choices = c("Choose one" = "", flep_runs))
-                         ), # input dir input field
-                  
-                  column(width=12,
-                         fluidRow(DTOutput("barcode_geno"))),
-                  
-                  column(width=12,
+            box(width = 12, status = "primary", solidHeader = TRUE, title="chose a FLEPseq run",
+                selectizeInput("selectdir", NULL, choices = c("Choose one" = "", flep_runs), multiple = FALSE, options = list(closeAfterSelect = TRUE)),
+                fluidRow(DTOutput("barcode_geno")),
                          textOutput("rundir"),
-                         textOutput("genotypes"))
-                  )# /box
+                         textOutput("genotypes")
+                  ),# /box
 
-            ), #/fluidRow
+
             # plots about run
-            fluidRow(
-              box(width = 12, status = "primary", solidHeader = TRUE, title="Run mapping & Coverage", collapsible = T, collapsed=T,
-                  column(width=12, 
-                         splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")))
-              ) #/ box
-            ) #/ fluidRow
-            
-            
+            box(width = 12, status = "primary", solidHeader = TRUE, title="Run mapping & Coverage", collapsible = T, collapsed=T,
+                column(width=12, 
+                       splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")))
+                ) #/ box
+
     ), # /tabitem dashboard
     
-    # Sidebar AGIspecific -----
-    tabItem(tabName = "AGIspecific",
-            fluidRow(tabBox(title = "AGI specific Plots",
-                            width = NULL,
-                            
-                            # BOX CONTAINING OPTIONS FOR ALL tabPanels of AGIspecific section
-                            fluidRow(
-                              box(width = 12, status = "primary", solidHeader = TRUE, title="Select your Gene of interest",
-                                  column(width=12,
-                                         selectizeInput("AGI", inputId = 'AGI', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE))),
-                                  column(width=3,
-                                         actionButton(inputId = "SubmitAGI", label = "Get Data")),
-                                  column(width=12,
-                                         textOutput("agi"))
-                              ), # /box
-                              
-                            ), # /fluidrow
-                            
-                            tabPanel(h5("AGI Selector"),
-                                     fluidRow(
-                                       fluidRow(box(width = 12, column(width=12, plotOutput("plot_gene")))),
-                                       fluidRow(column(width = 12,dataTableOutput("GFF_table"))),
-                                       
-                                       ) # /fluidrow
-                            ), # /tabpanel
-                                     
-                            tabPanel(h5("Intron Retention"),
-                                     fluidRow(
-                                       box(width=12, status="primary", solidHeader = T, title="Intronic profile selection", collapsible=T, collapsed=F,
-                                         column(width=12,
-                                                uiOutput("checkbox_introns"))
-                                         ) # /box
-                                     ), #/ fluidRow
-                                     uiOutput("plotreads.ui")
-                            ), # /tabpanel
-                            tabPanel(h5("PolyA Site"),plotOutput("plot_polyA_site")
-                            ),
-                            tabPanel(h5("AGI FLEPseq Results"),
-                                     fluidRow(
-                                       box(width = 12, status = "primary", solidHeader = TRUE, title="Select a subsets of columns",
-                                           column(width=12,
-                                                  selectizeInput('column_sel', NULL,choices=NULL, selected=NULL, multiple=T), # columns selector
-                                           column(width=3,
-                                                  actionButton(inputId = "update_cols",
-                                                               label = "Update columns")))
-                                           ),
+    # Sidebar transcriptSpecific -----
+    tabItem(tabName = "transcriptSpecificTab",
+            box(width = 12, 
+                status = "primary", 
+                solidHeader = TRUE, 
+                title="Select your Gene of interest",
+                column(width=12,
+                       selectizeInput("transcript", inputId = 'transcript', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE))),
+                column(width=3,
+                       actionButton(inputId = "Submittranscript", label = "Get Data")),
+                column(width=12,
+                       textOutput("transcript"))
+            ), # /box
+            tabsetPanel(
+              tabPanel(h5("transcript Selector"),
+                       plotOutput("plot_gene"),
+                       dataTableOutput("GFF_table"),
+                       ), # /tabpanel
+              tabPanel(h5("Intron Retention"),
+                       fluidRow(box(width=12, status="primary", solidHeader = T, title="Intronic profile selection", collapsible=T, collapsed=F,
+                                    uiOutput("checkbox_introns")
+                                ), # /box
+                       ),
+                       fluidRow(uiOutput("plotreads.ui"))
+                       ), # /tabpanel
+              tabPanel(h5("transcript FLEPseq Results"),
+                       box(width = 12, status = "primary", solidHeader = TRUE, title="Select a subsets of columns",
+                           selectizeInput('column_sel', NULL,choices=NULL, selected=NULL, multiple=T), # columns selector
+                           actionButton(inputId = "update_cols",label = "Update columns")),
+                       dataTableOutput("transcript_data_col_sel")
 
-                                       ), # /fluidrow
+                       ) # /tabPanel
+              ) # / tabsetpanel
 
-                                     hr(),
-                                     dataTableOutput("AGI_dt_t", height = "40em")
-                                     #uiOutput("AGI_dt_t")
-                                     #DTOutput("AGI_dt_t", height = "auto", fill = T)
-                                     
-
-                                     ) # /tabPanel
-                            
-                            ) # / tabbox
-            ) #/ fluidRow
             
-    ), #/ tabitem AGIspecific
+    ), #/ tabitem transcriptspecific
     
-    # Sidebar AGIlist -----
-    tabItem(tabName = "AGIlist",
-            fluidRow(tabBox(title = "AGI list Plots",
-                            width = NULL,
-                            fluidRow(
-                              box(width = 12, status = "primary", solidHeader = TRUE, title="Select your Genes of interest",
-                                  column(width=12,
-                                         textAreaInput("AGIs", "Insert you gene list here", width = "400px")),
-                                  column(width=3,
-                                         actionButton(inputId = "SubmitAGIs", label = "Get Data")),
-                                  column(width=12,
-                                         textOutput("agis"))
-                              ), # /box
-                              
-                            ), # /fluidrow
-                            tabPanel(h5("AGIs FLEPseq results"),
-                                     fluidRow(
-                                       #fluidRow(box(width = 12, column(width=12, plotOutput("polya_distrib_agis")))),
-                                       fluidRow(column(width = 12,dataTableOutput("AGIs_table"))),
-                                       
-                                     ) # /fluidrow
-                            ), # / tabpanel
-                            tabPanel(h5("PolyA Distribution"),
-                                     plotOutput("polyA_distr_AGIs")
-                            ) # /tabpanel
+    # Sidebar transcriptlist -----
+    tabItem(tabName = "transcriptsListTab",
+            box(width = 12,
+                status = "primary", 
+                solidHeader = TRUE, title="Select your Genes of interest",
+                column(width=12,
+                       textAreaInput("transcripts", "Insert you transcripts ids list here (one by line)", width = "400px")),
+                column(width=3,
+                       actionButton(inputId = "Submittranscripts", label = "Get Data")),
+                column(width=12,
+                       textOutput("transcripts"))
+            ), # /box
+            tabsetPanel(
+              tabPanel(h5("transcripts FLEPseq results"),
+                       dataTableOutput("transcripts_table"),
+                       ), # / tabpanel
+              tabPanel(h5("PolyA Distribution"),
+                       plotOutput("polyA_distr_transcripts")
+                       ) # /tabpanel
                             
 
-            ) # / tabbox
-            ) #/ fluidRow
-            
-    ) #/ tabitem AGIlist
+            ) # / tabsetpanel
+
+    ) #/ tabitem transcriptlist
 
   ) #/ tabitems
 ) #/ dashboardbody 
@@ -192,39 +150,35 @@ server <- function(input, output, session) {
     req(global$barcode_corr)
     map_files <- global$barcode_corr$map_file
     names(map_files) <- global$barcode_corr$genotype
-    mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "origin")
+    mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "origin") %>%
+      filter(origin %in% genoSelect())
   })
   
-  AGIs_data <- eventReactive(input$SubmitAGIs, {
-    req(input$selectdir, input$AGIs)
+  transcripts_data <- eventReactive(input$Submittranscripts, {
+    req(input$selectdir, input$transcripts)
 
     tabixed_list <- global$barcode_corr$tabix_file
     names(tabixed_list) <- global$barcode_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
-    print("###")
-    print(tabixed_df)
-    print(input$AGIs)
+
     column_names <- names(fread(cmd = paste('head -n 1', global$barcode_corr$tail_file[1])))
     column_names <- c('origin', column_names)
     
-    AGIs_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_multiple_regions, AGIs=input$AGIs), idcol = "origin")
-    colnames(AGIs_DF) <- column_names
-    AGIs_DF <- AGIs_DF %>%
+    transcripts_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_multiple_regions, transcripts=input$transcripts), idcol = "origin")
+    colnames(transcripts_DF) <- column_names
+    transcripts_DF <- transcripts_DF %>%
       filter(origin %in% genoSelect()) 
-    
-    
-    print(colnames(AGIs_DF))
-    print("#@@@@@@@@@@@@@@")
-    return(AGIs_DF)
+
+    return(transcripts_DF)
   })
   
-  # AGI specific data (FLEPseq results, gff and coordinates)
-  AGI_data <- eventReactive(input$SubmitAGI,{
+  # transcript specific data (FLEPseq results, gff and coordinates)
+  transcript_data <- eventReactive(input$Submittranscript,{
     
-    req(input$selectdir, input$AGI)
+    req(input$selectdir, input$transcript)
     
     # GFF gymnastics to handle introns
-    gff_infos <- read_GFF_file(ref_gff, input$AGI)
+    gff_infos <- read_GFF_file(ref_gff, input$transcript)
     mRNA_df <- gff_infos %>% filter(feature=="mRNA")
     exon_df <- gff_infos %>% filter(feature=="exon")
     mRNA_GR <- GRanges(mRNA_df$ROI)
@@ -240,17 +194,17 @@ server <- function(input, output, session) {
       
       GFF_DF <- rbind(gff_infos, introns_regions, fill=T) %>%
         group_by(feature) %>%
-        mutate(AGI=input$AGI,
+        mutate(transcript=input$transcript,
                feat_id=case_when(orientation==0 ~paste0(feature, rev(seq_along(feature))),
                                  orientation==1 ~paste0(feature, seq_along(feature))))%>%
         arrange(start)
     } else {
       GFF_DF <- gff_infos %>%
-        mutate(AGI=input$AGI) %>%
+        mutate(transcript=input$transcript) %>%
         arrange(start)
     }
     
-    # Building AGI dataset
+    # Building transcript dataset
     column_names <- names(fread(cmd = paste('head -n 1', global$barcode_corr$tail_file[1])))
     column_names <- c('origin', column_names)
     tabixed_list <- global$barcode_corr$tabix_file
@@ -258,8 +212,8 @@ server <- function(input, output, session) {
     tabixed_df = setDT(as.list(tabixed_list))
     tryCatch(
       {
-        AGI_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_single_region, AGI=input$AGI), idcol = "origin")
-        shinyalert("Nice!", paste(nrow(AGI_DF), "transcripts in table"), type = "success")
+        transcript_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_single_region, transcript=input$transcript), idcol = "origin")
+        shinyalert("Nice!", paste(nrow(transcript_DF), "transcripts in table"), type = "success")
       },
       error = function(cond) {
         shinyalert("OUCH", paste("Error:", cond), type = "error")
@@ -270,26 +224,26 @@ server <- function(input, output, session) {
     tryCatch(
       expr = {
 
-        colnames(AGI_DF) <- column_names
-        AGI_DF <- AGI_DF %>% 
+        colnames(transcript_DF) <- column_names
+        transcript_DF <- transcript_DF %>% 
           mutate(Run=basename(global$datapath))%>%
           mutate(across(retention_introns, as.character))%>%
           mutate(retention_introns = replace_na(retention_introns, "none")) %>%
           filter(origin %in% genoSelect())
         
-        n_introns <- unique(AGI_DF$mRNA_intron_num)
+        n_introns <- unique(transcript_DF$mRNA_intron_num)
         
         
         if (n_introns>0) {
           intron_cols <- paste0("intron",1:n_introns)
-          setDT(AGI_DF)
-          AGI_DF <- AGI_DF[, paste(intron_cols) := lapply(paste(intron_cols), getIntronsRetained, retained_introns = as.character(retention_introns)), by = retention_introns]
+          setDT(transcript_DF)
+          transcript_DF <- transcript_DF[, paste(intron_cols) := lapply(paste(intron_cols), getIntronsRetained, retained_introns = as.character(retention_introns)), by = retention_introns]
           print(intron_cols)
-          coords_df <- build_coords_df(AGI_DF, GFF_DF, intron_cols) 
+          coords_df <- build_coords_df(transcript_DF, GFF_DF, intron_cols) 
 
           
         } else {
-          coords_df <- build_coords_df(AGI_DF, GFF_DF, vector()) 
+          coords_df <- build_coords_df(transcript_DF, GFF_DF, vector()) 
         }
 
         # Building coords df
@@ -297,7 +251,7 @@ server <- function(input, output, session) {
           group_by(read_id, origin, chr, read_start, read_end, retention_introns, polya_length, additional_tail) %>%
           arrange(retention_introns, read_end-read_start, polya_length, str_length(additional_tail)) %>%
           mutate(ID = cur_group_id())
-        updateSelectizeInput(session, "column_sel", choices=colnames(AGI_DF))
+        updateSelectizeInput(session, "column_sel", choices=colnames(transcript_DF))
       
         
       },
@@ -307,22 +261,11 @@ server <- function(input, output, session) {
       }
     )
     
-    AGI_DATA <- list(AGI_DF = AGI_DF, GFF_DF = GFF_DF, COORDS_DF = coords_df)
+    transcript_DATA <- list(transcript_DF = transcript_DF, GFF_DF = GFF_DF, COORDS_DF = coords_df)
     
-    return(AGI_DATA)
+    return(transcript_DATA)
     
   })
-  
-  # filters AGI_data with users' selection of columns
-  filteredcols <- eventReactive({input$update_cols},{
-    req(AGI_data())
-    if (is.null(input$column_sel) || input$column_sel == "") {
-      return(AGI_data()$AGI_DF)
-    } else {
-      return(AGI_data()$AGI_DF[ ,colnames(AGI_data()$AGI_DF) %in% input$column_sel, with=FALSE])
-    } 
-  })
-  
 
   
   filteredintron <- reactive({ 
@@ -331,7 +274,7 @@ server <- function(input, output, session) {
       return(NULL)
     }  
 
-    filtered_df<- AGI_data()$COORDS_DF %>% 
+    filtered_df<- transcript_data()$COORDS_DF %>% 
       filter(retention_introns %in% as.vector(input$retention_introns)) %>%
       arrange(origin) %>%
       group_by(ID, origin)
@@ -347,7 +290,7 @@ server <- function(input, output, session) {
   observe({
     text_geno(unlist(genoSelect()))
   })
-  
+
   # Observer for selectdir. 
   observeEvent(ignoreNULL = TRUE,
                eventExpr = {input$selectdir},
@@ -374,49 +317,69 @@ server <- function(input, output, session) {
                      tabix_files <- paste(basename(global$barcode_corr$tail_file), collapse='\n')
                      shinyalert("Nice!", paste("Successfully added", tabix_files, sep="\n"), type = "success")
                      genes_list=unique(rbindlist(lapply(global$barcode_corr$gene_list, fread, header=F)))
-                     updateSelectizeInput(session, 'AGI', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
+                     updateSelectizeInput(session, 'transcript', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
                      
                    } 
                  }
                }) # end observer selectdir
   
-  # Observer for AGI 
+  # Observer for transcript 
   observeEvent(ignoreNULL = TRUE,
-               eventExpr = {input$AGI},
+               eventExpr = {input$transcript},
                handlerExpr = {
                  if (!input$selectdir == "") {
-                   text_agi(paste("Selected gene:",input$AGI, sep=" "))
+                   text_transcript(paste("Selected gene:",input$transcript, sep=" "))
                    
                 }
                })
   
-  # Observer for AGIs list 
+  # Observer for transcripts list 
   observeEvent(ignoreNULL = TRUE,
-               eventExpr = {input$AGIs},
+               eventExpr = {input$transcripts},
                handlerExpr = {
                  if (!input$selectdir == "") {
-                   text_agis(paste("Selected genes:",input$AGIs, sep=" "))
+                   text_transcripts(paste("Selected genes:",input$transcripts, sep=" "))
                    
                  }
                })
+
   
+  filtereddata <- eventReactive(input$update_cols,{
+    
+    if (is.null(input$column_sel)) {
+      filtereddata <- transcript_data()$COORDS_DF
+    } else {
+      filtereddata <- transcript_data()$COORDS_DF%>% 
+        ungroup()%>%
+        select(input$column_sel)
+    }
+    
+    
+    
+    return(filtereddata)
+    
+  })
   
+  output$transcript_data_col_sel  <- renderDataTable(filtereddata())
+  
+ 
+
   ### --- OBSERVERS
 
   
   ### OUTPUTS ---
   
 
-  output$checkbox_introns <- renderUI(radioButtons('retention_introns', 'Select Retention intron', choices =unique(AGI_data()$AGI_DF$retention_introns), inline = T))
+  output$checkbox_introns <- renderUI(radioButtons('retention_introns', 'Select Retention intron', choices =unique(transcript_data()$transcript_DF$retention_introns), inline = T))
 
   text_rundir <- reactiveVal('Please select a directory')
   output$rundir <- renderText({text_rundir()}) #output$rundir
   
-  text_agi <- reactiveVal('Please select a gene')
-  output$agi <- renderText({text_agi()}) #output$agi
+  text_transcript <- reactiveVal('Please select a gene')
+  output$transcript <- renderText({text_transcript()}) #output$transcript
   
-  text_agis <- reactiveVal('Please select genes')
-  output$agis <- renderText({text_agis()}) #output$agis
+  text_transcripts <- reactiveVal('Please select genes')
+  output$transcripts <- renderText({text_transcripts()}) #output$transcripts
   
   text_geno <- reactiveVal('Please select genotypes')
   output$genotypes <- renderText({text_geno()}) #output$geno
@@ -438,10 +401,7 @@ server <- function(input, output, session) {
     
     
   })
-  
-  observe({
-    text_geno(genoSelect() )
-  })
+
   
   genoSelect <- reactive({
     rows=names(input)[grepl(pattern = "srows_",names(input))]
@@ -461,46 +421,14 @@ server <- function(input, output, session) {
   
   
   output$GFF_table <- renderDataTable(
-    req(AGI_data()$GFF_DF)
+    req(transcript_data()$GFF_DF)
   )
   
-  output$AGIs_table <- renderDataTable(
-    req(AGIs_data())
+  output$transcripts_table <- renderDataTable(
+    req(transcripts_data())
   )
   
-  output$AGI_dt_t <- renderDataTable({
-    
-    req(AGI_data())
-    if (is.null(input$column_sel) || input$column_sel == "") {
-      dt_render <- AGI_data()$AGI_DF
-    } else {
-      dt_render <- filteredcols()
-    }
-    
-    #saveRDS(object = aa.dt(), file = "debugging/aa_dt.rds")
-    nlines <- nrow(dt_render)
-    current_datetime <- now()
-    formatted_datetime <- format(current_datetime, format = "%Y%m%d_%H%M%S")
-    outfile <- paste0(input$AGI, "_", formatted_datetime)
-    datatable(dt_render, 
-              caption = NULL,
-              rownames = FALSE, 
-              options = list(dom = "Bfrtip", 
-                             pageLength = nlines,
-                             #deferRender = TRUE,
-                             #scrollY = 400,
-                             #scroller = TRUE,
-                             buttons = list(list(extend = "copy", header = TRUE, title = NULL), 
-                                            list(extend = "csv", header = TRUE, filename = outfile))
-                             
-              ), 
-              
-              extensions = c("Buttons", "Scroller"),
-              
-              fillContainer = T)
 
-    
-  }, server = FALSE)
   
   output$coverage <- renderPlot({
     req(MAP_data())
@@ -533,21 +461,21 @@ server <- function(input, output, session) {
       theme(legend.position = "none")
   })
   
-  output$polyA_distr_AGIs <- renderPlot({
-    req(AGIs_data())
-    ggplot(AGIs_data(), aes(x=polya_length, color=origin)) +
+  output$polyA_distr_transcripts <- renderPlot({
+    req(transcripts_data())
+    ggplot(transcripts_data(), aes(x=polya_length, color=origin)) +
       geom_density()
   })
   
   output$plot_gene <- renderPlot({
-    req(AGI_data())
-    GFF_DF <- AGI_data()$GFF_DF 
+    req(transcript_data())
+    GFF_DF <- transcript_data()$GFF_DF 
     print(GFF_DF)
     gff_gene <- GFF_DF%>% filter(feat_type=="gene")
     gff_subgene <- GFF_DF%>% filter(feat_type=="subgene")
     parent_start <- gff_gene$start
     parent_stop <- gff_gene$end
-    title <- paste(gff_gene$AGI, gff_gene$ROI)
+    title <- paste(gff_gene$transcript, gff_gene$ROI)
     
     ggplot() +
       # plot model gene...
@@ -570,7 +498,7 @@ server <- function(input, output, session) {
   })
 
   output$plot_reads <- renderPlot({
-    req(AGI_data())
+    req(transcript_data())
     
     coords_df <- filteredintron()
     validate(need(!is.null(input$retention_introns), "Please select a data set"))
@@ -666,26 +594,7 @@ server <- function(input, output, session) {
     plotOutput("plot_reads", height = plotHeight())
   })
   
-  
-  output$plot_polyA_site <- renderPlot({
-    req(AGI_data())
-    coords_df <- AGI_data()$COORDS_DF %>% 
-      group_by(polya_start_base, polya_length, origin) %>%
-      summarise(n=n())
-    #ggplot(coords_df, aes(x=polya_start_base, y=round(polya_length), size=n)) +
-    #  geom_point(aes(colour = factor(origin)))
 
-    
-    ggplot(coords_df, aes(round(polya_length), polya_start_base)) + 
-      geom_tile(aes(fill = n)) + 
-      geom_text(aes(label = n), 
-                size = 3) + 
-      coord_fixed() + 
-      scale_fill_viridis_c() + 
-      guides(fill = FALSE) +
-      scale_color_viridis_c()
-    
-  })
   ### --- OUTPUTS
   
   

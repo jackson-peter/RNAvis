@@ -39,6 +39,6 @@ sample_table="barcode_correspondance.*$"
 index_ext=".sorted.csv.gz"
 tabix_l_ext=".list.tsv"
 
-AGI_col=4
+transcript_col=4
 start_col=6
 end_col=7

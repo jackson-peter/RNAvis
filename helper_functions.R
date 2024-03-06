@@ -34,8 +34,8 @@ sort_and_tabix <- function(tail_f) {
   tail_f_sorted <- gsub(tail_ext, ".sorted.csv", tail_f)
   tabix_l_file <- gsub(tail_ext, tabix_l_ext, tail_f)
   tail_f_gz <- paste0(tail_f_sorted, ".gz")
-  sort_cmd=paste0("{ head -n 1 ",tail_f, " && tail -n +2 ", tail_f, " | sort -k",AGI_col," -k",start_col,"n,",end_col,"n; } > ", tail_f_sorted)
-  tabix_cmd <- paste(bgzip, tail_f_sorted, "&&",  tabix, tail_f_gz, "-S 1 -s",AGI_col,"-b",start_col,"-e",end_col)
+  sort_cmd=paste0("{ head -n 1 ",tail_f, " && tail -n +2 ", tail_f, " | sort -k",transcript_col," -k",start_col,"n,",end_col,"n; } > ", tail_f_sorted)
+  tabix_cmd <- paste(bgzip, tail_f_sorted, "&&",  tabix, tail_f_gz, "-S 1 -s",transcript_col,"-b",start_col,"-e",end_col)
   
   tabix_l_cmd <- paste(tabix, "-l", tail_f_gz, ">", tabix_l_file)
   system(sort_cmd)
@@ -59,26 +59,26 @@ check_if_tabixed <- function(tabix_file,tail_file, index=".tbi") {
   } 
 }
 
-# Read only part of files containing users' AGI 
-read_tabixed_files_single_region <- function(file, AGI) {
-  dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, AGI, "-h"), header = F)
+# Read only part of files containing users' transcript 
+read_tabixed_files_single_region <- function(file, transcript) {
+  dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, transcript, "-h"), header = F)
   return(dt)
   }
    
   
 
 
-# Read only part of files containing users' AGI 
-read_tabixed_files_multiple_regions <- function(file, AGIs) {
-  AGIs_string <- paste(unique(unlist(strsplit(AGIs, "\n"))), collapse = " ")
+# Read only part of files containing users' transcript 
+read_tabixed_files_multiple_regions <- function(file, transcripts) {
+  transcripts_string <- paste(unique(unlist(strsplit(transcripts, "\n"))), collapse = " ")
 
-  dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, AGIs_string, "-h"), header = F)
+  dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, transcripts_string, "-h"), header = F)
   }
 
-# Read GFF file for specified AGI
-read_GFF_file <- function(gff, AGI) {
-  #dt <- fread(cmd = paste("grep", AGI, gff, "| grep -P 'mRNA|exon|five_prime_UTR|three_prime_UTR'"), col.names = gff_colnames) %>%
-  dt <- fread(cmd = paste("grep", AGI, gff, "| grep -P 'mRNA|exon'"), col.names = gff_colnames) %>%
+# Read GFF file for specified transcript
+read_GFF_file <- function(gff, transcript) {
+  #dt <- fread(cmd = paste("grep", transcript, gff, "| grep -P 'mRNA|exon|five_prime_UTR|three_prime_UTR'"), col.names = gff_colnames) %>%
+  dt <- fread(cmd = paste("grep", transcript, gff, "| grep -P 'mRNA|exon'"), col.names = gff_colnames) %>%
     mutate(orientation=case_when(strand=='-' ~ 0,
                                  strand=='+' ~ 1),
            feat_type =case_when(feature=="mRNA" ~ "gene",
@@ -94,16 +94,16 @@ getIntronsRetained <- function(intron_name, retained_introns){
   
 }
 
-build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
+build_coords_df <- function(transcript_df, GFF_DF, intron_cols) {
 
-  AGI_df_coords <- AGI_df  %>%
-    left_join(GFF_DF, by = c("mRNA"="AGI"), relationship = "many-to-many") %>%
+  transcript_df_coords <- transcript_df  %>%
+    left_join(GFF_DF, by = c("mRNA"="transcript"), relationship = "many-to-many") %>%
     separate(read_core_id, into=c("read_id", "chr", "read_start", "read_end"), sep = ',' , remove = F, convert = T) %>%
     mutate(addtail_nchar =nchar(additional_tail))
-  AGI_df_coords$orientation=unique(GFF_DF$orientation)
+  transcript_df_coords$orientation=unique(GFF_DF$orientation)
   
 
-  transcripts_df <- AGI_df_coords %>%
+  transcripts_df <- transcript_df_coords %>%
     filter(feature=="mRNA") %>%
     mutate(feature="transcript",
            feat_type="transcript",
@@ -117,19 +117,19 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
 
     # This data frame looks for the values of feat_id that are also column names (intron1 intron2 ...)
     # and checks whether it is retained or not.
-    to_rem <- AGI_df_coords %>%
+    to_rem <- transcript_df_coords %>%
       filter(feat_id %in% colnames(.)) %>%
       rowwise() %>%
       mutate(retained = case_when(feature=="intron" ~ get(as.character(feat_id)),
                                   TRUE ~ FALSE)) %>%
       filter(retained==TRUE)
     
-    AGI_df_coords<- AGI_df_coords %>%
+    transcript_df_coords<- transcript_df_coords %>%
       filter(feature!="intron") %>%
       mutate(retained=FALSE)
 
-    AGI_df_coords <- AGI_df_coords %>%dplyr::select(all_of(c(cols_to_keep)))%>%
-      bind_rows(AGI_df_coords, to_rem, transcripts_df)%>%
+    transcript_df_coords <- transcript_df_coords %>%dplyr::select(all_of(c(cols_to_keep)))%>%
+      bind_rows(transcript_df_coords, to_rem, transcripts_df)%>%
       dplyr::select(-c(intron_cols))
     
 
@@ -137,17 +137,17 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
   } else  if (is.na(intron_cols)) {
     cols_to_keep <- c("orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read", "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type")
 
-    AGI_df_coords <- AGI_df_coords 
-    AGI_df_coords <-  bind_rows(AGI_df_coords, transcripts_df)
+    transcript_df_coords <- transcript_df_coords 
+    transcript_df_coords <-  bind_rows(transcript_df_coords, transcripts_df)
 
 
-    AGI_df_coords<- AGI_df_coords %>%
+    transcript_df_coords<- transcript_df_coords %>%
       filter(feature!="intron") %>%
       mutate(retained=FALSE)
 
-    AGI_df_coords <-  AGI_df_coords%>%
+    transcript_df_coords <-  transcript_df_coords%>%
       dplyr::select(all_of(c(cols_to_keep)))%>%
-      bind_rows(AGI_df_coords, transcripts_df)
+      bind_rows(transcript_df_coords, transcripts_df)
 
 
 
@@ -156,7 +156,7 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
     stop("something went wrong with introns")
   }
   
-  polya_df <- AGI_df_coords %>%
+  polya_df <- transcript_df_coords %>%
     filter(feature=="mRNA") %>%
     mutate(feature="polyA_tail",
            feat_type="tail",
@@ -166,7 +166,7 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
            end= case_when(orientation==1 ~ read_end+ round(polya_length),
                           orientation==0 ~ read_start -round(polya_length)))
   
-  addtail_df <- AGI_df_coords %>%
+  addtail_df <- transcript_df_coords %>%
     filter(feature=="mRNA") %>%
     mutate(feature="add_tail",
            feat_type="tail",
@@ -179,12 +179,12 @@ build_coords_df <- function(AGI_df, GFF_DF, intron_cols) {
                          orientation==0 & is.na(additional_tail) ~ read_start - round(polya_length)))
 
   
-  AGI_df_coords <-  bind_rows(AGI_df_coords, polya_df, addtail_df)%>%
+  transcript_df_coords <-  bind_rows(transcript_df_coords, polya_df, addtail_df)%>%
     arrange(read_core_id, start, end)
   
-  #write_tsv(AGI_df_coords, "~/Data/testAGI.tsv")
+  #write_tsv(transcript_df_coords, "~/Data/testtranscript.tsv")
   
-  return(AGI_df_coords)
+  return(transcript_df_coords)
   
 }
 

@@ -18,19 +18,22 @@ header <-
                                          href = "mailto:jackson.peter@ibmp-cnrs.unistra.fr"),
                                        icon = icon('comment'))
                    ) #/ dashboardheader
+#header$children[[2]]$children <-  tags$a(href='https://www.ibmp.cnrs.fr/',
+#                                           tags$img(src='logo.png',height='15',width='50'))
 
 # sidebar ------
 sidebar <-
   dashboardSidebar(
     hr(),
     sidebarMenu(id = "tabs",
-                menuItem("Run Selection", tabName = 'runTab', icon = icon('dashboard', selected=TRUE)),
-                menuItem("Transcript-Specific", tabName = "transcriptSpecificTab", icon=icon("line-chart")),
-                menuItem("Transcripts List", tabName = "transcriptsListTab", icon=icon("line-chart"))
+                menuItem("Run Selection", tabName = 'runTab', icon = icon('gears'), selected=TRUE),
+                menuItem("Transcript-Specific", tabName = "transcriptSpecificTab", icon=icon("minus")),
+                menuItem("Transcripts List", tabName = "transcriptsListTab", icon=icon("list-ul"))
                 #menuItem("ReadMe", tabName = "readme", icon=icon("mortar-board")),
                 #menuItem("About", tabName = "about", icon = icon("question"))
                 
-    ) #/ sidebarmenu
+    ), #/ sidebarmenu
+    hr()
   ) #/ dashboardsidebar
 
 
@@ -41,20 +44,22 @@ body <-
   # Sidebar Tab Main dashboard -----
   tabItems(
     # sidebar Tab: run selector
-    tabItem(tabName = "runTab", 
+    tabItem(tabName = "runTab",
             # Inputs box ---
             box(width = 12, status = "primary", solidHeader = TRUE, title="chose a FLEPseq run",
-                selectizeInput("selectdir", NULL, choices = c("Choose one" = "", flep_runs), multiple = FALSE, options = list(closeAfterSelect = TRUE)),
-                fluidRow(DTOutput("barcode_geno")),
-                         textOutput("rundir"),
-                         textOutput("genotypes")
-                  ),# /box
+                selectizeInput("selectdir", inputId = 'selectdir', label=NULL, choices = c("Choose one" = "", flep_runs), multiple = FALSE),
+                fluidRow(column(dataTableOutput("barcode_geno"), width=11)),
+                fluidRow(column(textOutput("rundir"),width=11)),
+                fluidRow(column(textOutput("genotypes"),width=11))
+                ),# /box
+
 
 
             # plots about run
             box(width = 12, status = "primary", solidHeader = TRUE, title="Run mapping & Coverage", collapsible = T, collapsed=T,
-                column(width=12, 
-                       splitLayout(cellWidths = c("50%", "50%"), plotOutput("coverage"), plotOutput("mapq")))
+                fluidRow(column(splitLayout(plotOutput("coverage"),
+                                            plotOutput("mapq"), cellWidths = c("50%", "50%"))
+                                ,width=11))
                 ) #/ box
 
     ), # /tabitem dashboard
@@ -64,7 +69,7 @@ body <-
             box(width = 12, 
                 status = "primary", 
                 solidHeader = TRUE, 
-                title="Select your Gene of interest",
+                title="Select your Transcript of interest",
                 column(width=12,
                        selectizeInput("transcript", inputId = 'transcript', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE))),
                 column(width=3,
@@ -73,18 +78,18 @@ body <-
                        textOutput("transcript"))
             ), # /box
             tabsetPanel(
-              tabPanel(h5("transcript Selector"),
+              tabPanel(h5("Transcript Overview"),
                        plotOutput("plot_gene"),
-                       dataTableOutput("GFF_table"),
+                       dataTableOutput("GFF_table")
                        ), # /tabpanel
-              tabPanel(h5("Intron Retention"),
+              tabPanel(h5("Intronic Profiles"),
                        fluidRow(box(width=12, status="primary", solidHeader = T, title="Intronic profile selection", collapsible=T, collapsed=F,
                                     uiOutput("checkbox_introns")
-                                ), # /box
+                                    ) # /box
                        ),
                        fluidRow(uiOutput("plotreads.ui"))
                        ), # /tabpanel
-              tabPanel(h5("transcript FLEPseq Results"),
+              tabPanel(h5("FLEPseq Results"),
                        box(width = 12, status = "primary", solidHeader = TRUE, title="Select a subsets of columns",
                            selectizeInput('column_sel', NULL,choices=NULL, selected=NULL, multiple=T), # columns selector
                            actionButton(inputId = "update_cols",label = "Update columns")),
@@ -110,7 +115,7 @@ body <-
             ), # /box
             tabsetPanel(
               tabPanel(h5("transcripts FLEPseq results"),
-                       dataTableOutput("transcripts_table"),
+                       dataTableOutput("multiple_transcripts_table")
                        ), # / tabpanel
               tabPanel(h5("PolyA Distribution"),
                        plotOutput("polyA_distr_transcripts")
@@ -143,9 +148,11 @@ server <- function(input, output, session) {
   
   global <- reactiveValues(datapath = getwd())
   
-  ### EventReactive (reactive DATASETS) ---
+  ######################
+  ### REACTIVE DATA ---
+  ######################
   
-  # Mapping data
+  ## Mapping data (coverage etc...)
   MAP_data <- eventReactive(input$selectdir,{
     req(global$barcode_corr)
     map_files <- global$barcode_corr$map_file
@@ -154,16 +161,28 @@ server <- function(input, output, session) {
       filter(origin %in% genoSelect())
   })
   
+  ## Selected Genotypes
+  genoSelect <- reactive({
+    rows=names(input)[grepl(pattern = "srows_",names(input))]
+    paste(unlist(lapply(rows,function(i){
+      if(input[[i]]==T){
+        index=as.numeric(substr(i,gregexpr(pattern = "_",i)[[1]]+1,nchar(i)))
+        #print(global$barcode_corr$genotype[index])
+        
+        return(global$barcode_corr$genotype[index])
+      }
+    })))
+    
+  })
+  
+  ## Dataset for list of transcripts
   transcripts_data <- eventReactive(input$Submittranscripts, {
     req(input$selectdir, input$transcripts)
-
     tabixed_list <- global$barcode_corr$tabix_file
     names(tabixed_list) <- global$barcode_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
-
     column_names <- names(fread(cmd = paste('head -n 1', global$barcode_corr$tail_file[1])))
     column_names <- c('origin', column_names)
-    
     transcripts_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_multiple_regions, transcripts=input$transcripts), idcol = "origin")
     colnames(transcripts_DF) <- column_names
     transcripts_DF <- transcripts_DF %>%
@@ -172,11 +191,9 @@ server <- function(input, output, session) {
     return(transcripts_DF)
   })
   
-  # transcript specific data (FLEPseq results, gff and coordinates)
+  ## transcript specific data (FLEPseq results, gff and coordinates)
   transcript_data <- eventReactive(input$Submittranscript,{
-    
     req(input$selectdir, input$transcript)
-    
     # GFF gymnastics to handle introns
     gff_infos <- read_GFF_file(ref_gff, input$transcript)
     mRNA_df <- gff_infos %>% filter(feature=="mRNA")
@@ -219,11 +236,9 @@ server <- function(input, output, session) {
         shinyalert("OUCH", paste("Error:", cond), type = "error")
       }
     )
-      
-
+    
     tryCatch(
       expr = {
-
         colnames(transcript_DF) <- column_names
         transcript_DF <- transcript_DF %>% 
           mutate(Run=basename(global$datapath))%>%
@@ -232,16 +247,12 @@ server <- function(input, output, session) {
           filter(origin %in% genoSelect())
         
         n_introns <- unique(transcript_DF$mRNA_intron_num)
-        
-        
         if (n_introns>0) {
           intron_cols <- paste0("intron",1:n_introns)
           setDT(transcript_DF)
           transcript_DF <- transcript_DF[, paste(intron_cols) := lapply(paste(intron_cols), getIntronsRetained, retained_introns = as.character(retention_introns)), by = retention_introns]
           print(intron_cols)
           coords_df <- build_coords_df(transcript_DF, GFF_DF, intron_cols) 
-
-          
         } else {
           coords_df <- build_coords_df(transcript_DF, GFF_DF, vector()) 
         }
@@ -252,28 +263,18 @@ server <- function(input, output, session) {
           arrange(retention_introns, read_end-read_start, polya_length, str_length(additional_tail)) %>%
           mutate(ID = cur_group_id())
         updateSelectizeInput(session, "column_sel", choices=colnames(transcript_DF))
-      
-        
       },
-      error = function(e){ 
-
-        shinyalert("Erf!", paste("It seems that something went wrong", e), type = "error")
-      }
+      error = function(e){shinyalert("Erf!", paste("It seems that something went wrong", e), type = "error")}
     )
-    
     transcript_DATA <- list(transcript_DF = transcript_DF, GFF_DF = GFF_DF, COORDS_DF = coords_df)
     
     return(transcript_DATA)
-    
   })
 
-  
+  ## Dataset filtered by intronic profile
   filteredintron <- reactive({ 
     
-    if (is.null(input$retention_introns)) {
-      return(NULL)
-    }  
-
+    if (is.null(input$retention_introns)) { return(NULL) }  
     filtered_df<- transcript_data()$COORDS_DF %>% 
       filter(retention_introns %in% as.vector(input$retention_introns)) %>%
       arrange(origin) %>%
@@ -284,20 +285,49 @@ server <- function(input, output, session) {
 
   })
   
-  ### --- EventReactive 
+  ## Dataset column subsets
+  filtereddata <- eventReactive(input$update_cols,{
+    
+    if (is.null(input$column_sel)) {
+      filtereddata <- transcript_data()$COORDS_DF
+    } else {
+      filtereddata <- transcript_data()$COORDS_DF%>% 
+        ungroup()%>%
+        select(input$column_sel)
+    }
+    return(filtereddata)
+    
+  })
   
-  ### OBSERVERS ---
-  observe({
-    text_geno(unlist(genoSelect()))
+  ## get max number of reads by intronic profile (used to set plot's height)
+  plotCountRead <- reactive({
+    req(filteredintron())
+    sum <- filteredintron() %>% 
+      group_by(origin) %>%
+      summarise(n_read=n())
+    
+    return(max(sum$n_read))
+  })
+  
+  ## Set plot height
+  plotHeight <- reactive(10*plotCountRead()) 
+  
+  output$plotreads.ui <- renderUI({
+    plotOutput("plot_reads", height = plotHeight())
   })
 
-  # Observer for selectdir. 
+  ######################
+  ### OBSERVERS      ---
+  ######################  
+
+  ## Observer for selectdir. 
   observeEvent(ignoreNULL = TRUE,
                eventExpr = {input$selectdir},
                handlerExpr = {
                  # Sets paths variables
                  if (!input$selectdir == "") {
                    text_rundir(paste("Selected directory:",input$selectdir, sep=" ")) # set new value to reactiveVal
+                   text_geno(unlist(genoSelect())) # set new value to reactiveVal
                    global$datapath <- input$selectdir
                    
                    tail_files <- list.files(path=file.path(global$datapath,tail_dir), pattern = paste0(tail_ext, "$"),full.names = T)
@@ -311,7 +341,6 @@ server <- function(input, output, session) {
                               map_file=file.path(global$datapath, mapping_dir, paste0(barcode, mapping_ext)),
                               gene_list=file.path(global$datapath, tail_dir, paste0(barcode, tabix_l_ext)))
                      
-                     
                      # Check if files are tabixed, and tabix them if not
                      apply(global$barcode_corr[,c('tabix_file','tail_file')], 1, function(y) check_if_tabixed(y['tabix_file'],y['tail_file']))
                      tabix_files <- paste(basename(global$barcode_corr$tail_file), collapse='\n')
@@ -323,7 +352,7 @@ server <- function(input, output, session) {
                  }
                }) # end observer selectdir
   
-  # Observer for transcript 
+  ## Observer for transcript 
   observeEvent(ignoreNULL = TRUE,
                eventExpr = {input$transcript},
                handlerExpr = {
@@ -333,7 +362,7 @@ server <- function(input, output, session) {
                 }
                })
   
-  # Observer for transcripts list 
+  ## Observer for transcripts list 
   observeEvent(ignoreNULL = TRUE,
                eventExpr = {input$transcripts},
                handlerExpr = {
@@ -343,49 +372,34 @@ server <- function(input, output, session) {
                  }
                })
 
-  
-  filtereddata <- eventReactive(input$update_cols,{
-    
-    if (is.null(input$column_sel)) {
-      filtereddata <- transcript_data()$COORDS_DF
-    } else {
-      filtereddata <- transcript_data()$COORDS_DF%>% 
-        ungroup()%>%
-        select(input$column_sel)
-    }
-    
-    
-    
-    return(filtereddata)
-    
-  })
-  
-  output$transcript_data_col_sel  <- renderDataTable(filtereddata())
-  
- 
 
-  ### --- OBSERVERS
 
+  ######################
+  ### OUTPUTS       ---
+  ###################### 
   
-  ### OUTPUTS ---
-  
-
+  ## intronic profile selection (radiobuttons)
   output$checkbox_introns <- renderUI(radioButtons('retention_introns', 'Select Retention intron', choices =unique(transcript_data()$transcript_DF$retention_introns), inline = T))
 
+  ## output selected directory path
   text_rundir <- reactiveVal('Please select a directory')
   output$rundir <- renderText({text_rundir()}) #output$rundir
   
+  ## output selected transcript (1)
   text_transcript <- reactiveVal('Please select a gene')
   output$transcript <- renderText({text_transcript()}) #output$transcript
   
+  ## output selected transcripts (list)
   text_transcripts <- reactiveVal('Please select genes')
   output$transcripts <- renderText({text_transcripts()}) #output$transcripts
   
+  ## output selected genotypes
   text_geno <- reactiveVal('Please select genotypes')
   output$genotypes <- renderText({text_geno()}) #output$geno
   
-  selected_samples <- reactive({input$selected_graph})
   
+  ## output table of samples
+  selected_samples <- reactive({input$selected_graph})
   output$barcode_geno = DT::renderDataTable({
     req(global$barcode_corr$genotype)
     #Display table with checkbox buttons
@@ -393,43 +407,28 @@ server <- function(input, output, session) {
                   options = list(orderClasses = TRUE,
                                  lengthMenu = c(5, 25, 50),
                                  pageLength = 25 ,
-                                 
                                  drawCallback= JS(
                                    'function(settings) {
                                      Shiny.bindAll(this.api().table().node());}')
                   ),selection='none',escape=F)
-    
-    
   })
-
   
-  genoSelect <- reactive({
-    rows=names(input)[grepl(pattern = "srows_",names(input))]
-
-
-    paste(unlist(lapply(rows,function(i){
-      if(input[[i]]==T){
-        index=as.numeric(substr(i,gregexpr(pattern = "_",i)[[1]]+1,nchar(i)))
-        #print(global$barcode_corr$genotype[index])
-
-        return(global$barcode_corr$genotype[index])
-      }
-    })))
-    
-  })
-
+  ## output table with user-selected column
+  output$transcript_data_col_sel  <- renderDataTable(filtereddata())
   
-  
+  ## output GFF table
   output$GFF_table <- renderDataTable(
-    req(transcript_data()$GFF_DF)
+    req(transcript_data()$GFF_DF ),
+    options = list(pageLength = 50)
   )
   
-  output$transcripts_table <- renderDataTable(
-    req(transcripts_data())
+  ## output table for multiple transcripts
+  output$multiple_transcripts_table <- renderDataTable(
+    req(transcripts_data()),
+    options = list(pageLength = 100)
   )
   
-
-  
+  ## output coverage plot
   output$coverage <- renderPlot({
     req(MAP_data())
     cov <- MAP_data() %>%
@@ -448,7 +447,7 @@ server <- function(input, output, session) {
       )
   })
   
-  
+  ## output mapping quality plot
   output$mapq <- renderPlot({
     req(MAP_data())
     cov <- MAP_data() %>%
@@ -461,12 +460,23 @@ server <- function(input, output, session) {
       theme(legend.position = "none")
   })
   
+  ## output polyA bulk distribution for multiple transcripts
   output$polyA_distr_transcripts <- renderPlot({
     req(transcripts_data())
     ggplot(transcripts_data(), aes(x=polya_length, color=origin)) +
       geom_density()
   })
   
+  ## output poly a "intergenic" distribution for multiple transcripts
+  output$polyA_distr_transcripts_permrna <- renderPlot({
+    req(transcripts_data())
+    ggplot(transcripts_data() %>% 
+             group_by(mRNA) %>%
+             summarise(), aes(x=polya_length, color=origin)) +
+      geom_density()
+  })
+  
+  ## output gene plot
   output$plot_gene <- renderPlot({
     req(transcript_data())
     GFF_DF <- transcript_data()$GFF_DF 
@@ -494,61 +504,53 @@ server <- function(input, output, session) {
       theme(legend.position="bottom") +
       theme_void()
 
-    
   })
-
+  
+  ## output plot for transcript by  selected intronic profile 
   output$plot_reads <- renderPlot({
     req(transcript_data())
-    
     coords_df <- filteredintron()
     validate(need(!is.null(input$retention_introns), "Please select a data set"))
-    
     df_coords_gene <- coords_df %>% 
       filter(feat_type=="gene")
-    
     genotypes <- unique(coords_df$origin)
     gene_name <- unique(df_coords_gene$mRNA)
     
+    # gene
     df_coords_gene <- df_coords_gene[!duplicated(df_coords_gene$mRNA, by=c("retention_introns", "origin")),]
     df_coords_gene <- df_coords_gene[rep(seq_len(nrow(df_coords_gene)), each = length(genotypes)), ]
-    
     df_coords_gene$origin=genotypes
     
+    # subgene (intron exon)
     df_coords_subgene <- coords_df %>% filter(feat_type=="subgene") %>%
       mutate(parent_start=unique(df_coords_gene$start),
              parent_stop=unique(df_coords_gene$end))
-
+    
+    # tail info
     df_coords_tails <- coords_df %>% filter(feat_type=="tail") %>%
       mutate(parent_start=unique(df_coords_gene$start),
              parent_stop=unique(end))
     
+    # transcript
     df_coords_transcript <- coords_df %>% 
       filter(feat_type=="transcript") 
     
+    # filter subgene to remove introns/exons that exist in annotation but not present in read (ie not sequenced)
     df_coords_transcript_subgene <- df_coords_subgene %>%
       filter(start>=read_start,
              end<=read_end)
     
+    # combining dataframes
     df_coords_transcript_subgene_tail <- rbind(df_coords_transcript_subgene, df_coords_tails)
-    
-    
     df_coords_transcript_subgene_tail$parent_start <- min(df_coords_transcript_subgene_tail$start, na.rm = T) -1
     df_coords_transcript_subgene_tail$parent_stop <- max(df_coords_transcript_subgene_tail$end, na.rm=T) +1
     
+    # get limit of y axis
     limy_df <- df_coords_transcript %>%
       group_by(origin) %>%
       summarise(nb_ID = n_distinct(ID))
     
-    print(unique(df_coords_transcript_subgene_tail$parent_start))
-    print(unique(df_coords_transcript_subgene_tail$parent_stop))
-    
-    write_tsv(df_coords_transcript_subgene_tail %>%
-            select(c(origin, read_core_id, polya_length, additional_tail, feat_id, feature, feat_type, start, end, polya_start_raw, polya_end_raw, polya_start_base, polya_end_base, init_polya_start_base, init_polya_end_base, init_polya_length )), "~/testREV.tsv")
-    write_tsv(df_coords_transcript %>%
-                select(c(origin, read_core_id, polya_length, additional_tail, feat_id, feature, feat_type, start, end, polya_start_raw, polya_end_raw, polya_start_base, polya_end_base, init_polya_start_base, init_polya_end_base, init_polya_length )), "~/testREVgene.tsv")
-      
-    
-    
+    # plot
     ggplot() +
       # plot all transcripts
       geom_gene_arrow(data=df_coords_transcript,
@@ -573,35 +575,12 @@ server <- function(input, output, session) {
       theme(legend.background = element_rect(linewidth=0.5, linetype="solid")) +
       ggtitle(gene_name) 
     
-    #remove_modal_spinner() # remove it when done
   })
-  
-  
-  
-  
-  plotCountRead <- reactive({
-    req(filteredintron())
-    sum <- filteredintron() %>% 
-      group_by(origin) %>%
-      summarise(n_read=n())
-
-    return(max(sum$n_read))
-  })
-  
-  plotHeight <- reactive(10*plotCountRead()) 
-  
-  output$plotreads.ui <- renderUI({
-    plotOutput("plot_reads", height = plotHeight())
-  })
-  
-
-  ### --- OUTPUTS
-  
-  
 
 } # /server
 
 #######################################################################
 ### App calling 
+#######################################################################
 shinyApp(ui, server)
 

@@ -83,7 +83,9 @@ read_GFF_file <- function(gff, transcript) {
                                  strand=='+' ~ 1),
            feat_type =case_when(feature=="mRNA" ~ "gene",
                                 TRUE ~ "subgene"),
-           ROI=paste0(seqnames, ":", start,"-", end))
+           ROI=paste0(seqnames, ":", start,"-", end)) %>%
+    select(-c(attributes))
+  print(head(dt))
   
   return(dt)
 }

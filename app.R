@@ -276,9 +276,9 @@ server <- function(input, output, session) {
   filtereddata <- eventReactive(input$update_cols,{
     
     if (is.null(input$column_sel)) {
-      filtereddata <- transcript_data()$COORDS_DF
+      filtereddata <- transcript_data()$transcript_DF
     } else {
-      filtereddata <- transcript_data()$COORDS_DF%>% 
+      filtereddata <- transcript_data()$transcript_DF%>% 
         ungroup()%>%
         select(input$column_sel)
     }

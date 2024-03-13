@@ -1,5 +1,3 @@
-#source("global.R")
-
 
 get_flepruns <- function(datasets_path) {
   flep_runs <- list.dirs(datasets_path, recursive = F, full.names = T)
@@ -14,8 +12,6 @@ get_flepruns <- function(datasets_path) {
   
 }
 
-#### SERVER ####
-
 
 shinyInput <- function(FUN,id,num,...) {
   inputs <- character(num)
@@ -24,7 +20,6 @@ shinyInput <- function(FUN,id,num,...) {
   }
   inputs
 }
-
 
 # Sort file and tabix
 sort_and_tabix <- function(tail_f) {
@@ -64,9 +59,6 @@ read_tabixed_files_single_region <- function(file, transcript) {
   dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, transcript, "-h"), header = F)
   return(dt)
   }
-   
-  
-
 
 # Read only part of files containing users' transcript 
 read_tabixed_files_multiple_regions <- function(file, transcripts) {
@@ -85,11 +77,9 @@ read_GFF_file <- function(gff, transcript) {
                                 TRUE ~ "subgene"),
            ROI=paste0(seqnames, ":", start,"-", end)) %>%
     select(-c(attributes))
-  print(head(dt))
-  
+
   return(dt)
 }
-
 
 getIntronsRetained <- function(intron_name, retained_introns){
   intron_name %in% paste0("intron",unlist(strsplit(retained_introns, ":")))
@@ -103,8 +93,6 @@ build_coords_df <- function(transcript_df, GFF_DF, intron_cols) {
     separate(read_core_id, into=c("read_id", "chr", "read_start", "read_end"), sep = ',' , remove = F, convert = T) %>%
     mutate(addtail_nchar =nchar(additional_tail))
   transcript_df_coords$orientation=unique(GFF_DF$orientation)
-  
-
   transcripts_df <- transcript_df_coords %>%
     filter(feature=="mRNA") %>%
     mutate(feature="transcript",
@@ -183,8 +171,6 @@ build_coords_df <- function(transcript_df, GFF_DF, intron_cols) {
   
   transcript_df_coords <-  bind_rows(transcript_df_coords, polya_df, addtail_df)%>%
     arrange(read_core_id, start, end)
-  
-  #write_tsv(transcript_df_coords, "~/Data/testtranscript.tsv")
   
   return(transcript_df_coords)
   

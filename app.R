@@ -3,8 +3,8 @@ source("global.R")
 
 theme_set(theme_bw())
 
-############################################       UI       ###########################################################
-# header ------
+# UI ###########################################################
+# header =======================================================
 header <- 
   dashboardHeader( title = HTML("RNAvis"),
                    disable = F,
@@ -18,10 +18,8 @@ header <-
                                          href = "mailto:jackson.peter@ibmp-cnrs.unistra.fr"),
                                        icon = icon('comment'))
                    ) #/ dashboardheader
-#header$children[[2]]$children <-  tags$a(href='https://www.ibmp.cnrs.fr/',
-#                                           tags$img(src='logo.png',height='15',width='50'))
 
-# sidebar ------
+# sidebar =======================================================
 sidebar <-
   dashboardSidebar(
     hr(),
@@ -37,7 +35,7 @@ sidebar <-
   ) #/ dashboardsidebar
 
 
-# body ------
+# body =======================================================
 body <-
   dashboardBody(
   tags$head(includeCSS("www/custom.css")),
@@ -52,9 +50,6 @@ body <-
                 fluidRow(column(textOutput("rundir"),width=11)),
                 fluidRow(column(textOutput("genotypes"),width=11))
                 ),# /box
-
-
-
             # plots about run
             box(width = 12, status = "primary", solidHeader = TRUE, title="Run mapping & Coverage", collapsible = T, collapsed=T,
                 fluidRow(column(splitLayout(plotOutput("coverage"),
@@ -64,7 +59,7 @@ body <-
 
     ), # /tabitem dashboard
     
-    # Sidebar transcriptSpecific -----
+    # Sidebar tab transcriptSpecific -----
     tabItem(tabName = "transcriptSpecificTab",
             box(width = 12, 
                 status = "primary", 
@@ -101,7 +96,7 @@ body <-
             
     ), #/ tabitem transcriptspecific
     
-    # Sidebar transcriptlist -----
+    # Sidebar tab transcriptlist -----
     tabItem(tabName = "transcriptsListTab",
             box(width = 12,
                 status = "primary", 
@@ -130,16 +125,14 @@ body <-
 ) #/ dashboardbody 
 
 
-### UI construction
+# UI construction --------------------------------------------------------------
 ui <- dashboardPage(skin="green",
   header, 
   sidebar,
   body
 )
 
-############################################       SERVER       #######################################################
-
-
+# SERVER ###########################################################
 server <- function(input, output, session) {
   # This function stops the execution and fixes the bug requiring R termination when closing app
   session$onSessionEnded(function() {
@@ -148,10 +141,8 @@ server <- function(input, output, session) {
   
   global <- reactiveValues(datapath = getwd())
   
-  ######################
-  ### REACTIVE DATA ---
-  ######################
-  
+  ### REACTIVE DATA ------------------------------------------------------------
+
   ## Mapping data (coverage etc...)
   MAP_data <- eventReactive(input$selectdir,{
     req(global$barcode_corr)
@@ -167,7 +158,6 @@ server <- function(input, output, session) {
     paste(unlist(lapply(rows,function(i){
       if(input[[i]]==T){
         index=as.numeric(substr(i,gregexpr(pattern = "_",i)[[1]]+1,nchar(i)))
-        #print(global$barcode_corr$genotype[index])
         
         return(global$barcode_corr$genotype[index])
       }
@@ -232,9 +222,7 @@ server <- function(input, output, session) {
         transcript_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_single_region, transcript=input$transcript), idcol = "origin")
         shinyalert("Nice!", paste(nrow(transcript_DF), "transcripts in table"), type = "success")
       },
-      error = function(cond) {
-        shinyalert("OUCH", paste("Error:", cond), type = "error")
-      }
+      error = function(cond) {shinyalert("OUCH", paste("Error:", cond), type = "error")}
     )
     
     tryCatch(
@@ -251,7 +239,6 @@ server <- function(input, output, session) {
           intron_cols <- paste0("intron",1:n_introns)
           setDT(transcript_DF)
           transcript_DF <- transcript_DF[, paste(intron_cols) := lapply(paste(intron_cols), getIntronsRetained, retained_introns = as.character(retention_introns)), by = retention_introns]
-          print(intron_cols)
           coords_df <- build_coords_df(transcript_DF, GFF_DF, intron_cols) 
         } else {
           coords_df <- build_coords_df(transcript_DF, GFF_DF, vector()) 
@@ -316,9 +303,8 @@ server <- function(input, output, session) {
     plotOutput("plot_reads", height = plotHeight())
   })
 
-  ######################
-  ### OBSERVERS      ---
-  ######################  
+
+  ### OBSERVERS ---------------------------------------------------------------
 
   ## Observer for selectdir. 
   observeEvent(ignoreNULL = TRUE,
@@ -374,31 +360,29 @@ server <- function(input, output, session) {
 
 
 
-  ######################
-  ### OUTPUTS       ---
-  ###################### 
+  ### OUTPUTS ---------------------------------------------------------------
   
-  ## intronic profile selection (radiobuttons)
+  ## intronic profile selection (radiobuttons) ----
   output$checkbox_introns <- renderUI(radioButtons('retention_introns', 'Select Retention intron', choices =unique(transcript_data()$transcript_DF$retention_introns), inline = T))
 
-  ## output selected directory path
+  ## selected directory path ----
   text_rundir <- reactiveVal('Please select a directory')
   output$rundir <- renderText({text_rundir()}) #output$rundir
   
-  ## output selected transcript (1)
+  ## selected transcript (1) ----
   text_transcript <- reactiveVal('Please select a gene')
   output$transcript <- renderText({text_transcript()}) #output$transcript
   
-  ## output selected transcripts (list)
+  ##  selected transcripts (list) ----
   text_transcripts <- reactiveVal('Please select genes')
   output$transcripts <- renderText({text_transcripts()}) #output$transcripts
   
-  ## output selected genotypes
+  ## selected genotypes ----
   text_geno <- reactiveVal('Please select genotypes')
   output$genotypes <- renderText({text_geno()}) #output$geno
   
   
-  ## output table of samples
+  ## table of samples ----
   selected_samples <- reactive({input$selected_graph})
   output$barcode_geno = DT::renderDataTable({
     req(global$barcode_corr$genotype)
@@ -413,22 +397,22 @@ server <- function(input, output, session) {
                   ),selection='none',escape=F)
   })
   
-  ## output table with user-selected column
+  ## table with user-selected column ----
   output$transcript_data_col_sel  <- renderDataTable(filtereddata())
   
-  ## output GFF table
+  ## GFF table ----
   output$GFF_table <- renderDataTable(
     req(transcript_data()$GFF_DF ),
     options = list(pageLength = 50)
   )
   
-  ## output table for multiple transcripts
+  ##  table for multiple transcripts ----
   output$multiple_transcripts_table <- renderDataTable(
     req(transcripts_data()),
     options = list(pageLength = 100)
   )
   
-  ## output coverage plot
+  ## coverage plot ----
   output$coverage <- renderPlot({
     req(MAP_data())
     cov <- MAP_data() %>%
@@ -447,7 +431,7 @@ server <- function(input, output, session) {
       )
   })
   
-  ## output mapping quality plot
+  ## mapping quality plot ----
   output$mapq <- renderPlot({
     req(MAP_data())
     cov <- MAP_data() %>%
@@ -460,14 +444,14 @@ server <- function(input, output, session) {
       theme(legend.position = "none")
   })
   
-  ## output polyA bulk distribution for multiple transcripts
+  ## polyA bulk distribution for multiple transcripts ----
   output$polyA_distr_transcripts <- renderPlot({
     req(transcripts_data())
     ggplot(transcripts_data(), aes(x=polya_length, color=origin)) +
       geom_density()
   })
   
-  ## output poly a "intergenic" distribution for multiple transcripts
+  ## poly a "intergenic" distribution for multiple transcripts ----
   output$polyA_distr_transcripts_permrna <- renderPlot({
     req(transcripts_data())
     ggplot(transcripts_data() %>% 
@@ -476,11 +460,10 @@ server <- function(input, output, session) {
       geom_density()
   })
   
-  ## output gene plot
+  ## gene plot ----
   output$plot_gene <- renderPlot({
     req(transcript_data())
     GFF_DF <- transcript_data()$GFF_DF 
-    print(GFF_DF)
     gff_gene <- GFF_DF%>% filter(feat_type=="gene")
     gff_subgene <- GFF_DF%>% filter(feat_type=="subgene")
     parent_start <- gff_gene$start
@@ -506,7 +489,7 @@ server <- function(input, output, session) {
 
   })
   
-  ## output plot for transcript by  selected intronic profile 
+  ## plot for transcript by  selected intronic profile ----
   output$plot_reads <- renderPlot({
     req(transcript_data())
     coords_df <- filteredintron()
@@ -579,8 +562,6 @@ server <- function(input, output, session) {
 
 } # /server
 
-#######################################################################
-### App calling 
-#######################################################################
+# App calling ------------
 shinyApp(ui, server)
 

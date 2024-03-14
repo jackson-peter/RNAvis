@@ -87,6 +87,8 @@ getIntronsRetained <- function(intron_name, retained_introns){
 }
 
 build_coords_df <- function(transcript_df, GFF_DF, intron_cols) {
+  
+  print("building coords")
 
   transcript_df_coords <- transcript_df  %>%
     left_join(GFF_DF, by = c("mRNA"="transcript"), relationship = "many-to-many") %>%
@@ -121,25 +123,22 @@ build_coords_df <- function(transcript_df, GFF_DF, intron_cols) {
     transcript_df_coords <- transcript_df_coords %>%dplyr::select(all_of(c(cols_to_keep)))%>%
       bind_rows(transcript_df_coords, to_rem, transcripts_df)%>%
       dplyr::select(-c(intron_cols))
-    
 
     
-  } else  if (is.na(intron_cols)) {
+  } else  if (length(intron_cols)==0) {
     cols_to_keep <- c("orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read", "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type")
 
-    transcript_df_coords <- transcript_df_coords 
     transcript_df_coords <-  bind_rows(transcript_df_coords, transcripts_df)
-
 
     transcript_df_coords<- transcript_df_coords %>%
       filter(feature!="intron") %>%
       mutate(retained=FALSE)
-
+    
+    print("éééééééé")
+    print(colnames(transcript_df_coords))
     transcript_df_coords <-  transcript_df_coords%>%
       dplyr::select(all_of(c(cols_to_keep)))%>%
       bind_rows(transcript_df_coords, transcripts_df)
-
-
 
       
   } else {
@@ -171,6 +170,7 @@ build_coords_df <- function(transcript_df, GFF_DF, intron_cols) {
   
   transcript_df_coords <-  bind_rows(transcript_df_coords, polya_df, addtail_df)%>%
     arrange(read_core_id, start, end)
+  print(head(transcript_df_coords))
   
   return(transcript_df_coords)
   

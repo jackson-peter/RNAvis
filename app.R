@@ -190,6 +190,7 @@ server <- function(input, output, session) {
     exon_df <- gff_infos %>% filter(feature=="exon")
     mRNA_GR <- GRanges(mRNA_df$ROI)
     exon_GR <- GRanges(exon_df$ROI)
+    # if several exons(and therefore introns)
     if (nrow(exon_df)>1) {
       introns_regions <- as.data.frame(GenomicRanges::setdiff(mRNA_GR, exon_GR, ignore.strand=TRUE)) %>%
         mutate(feature="intron",
@@ -205,9 +206,11 @@ server <- function(input, output, session) {
                feat_id=case_when(orientation==0 ~paste0(feature, rev(seq_along(feature))),
                                  orientation==1 ~paste0(feature, seq_along(feature))))%>%
         arrange(start)
+    # if only one exon
     } else {
       GFF_DF <- gff_infos %>%
-        mutate(transcript=input$transcript) %>%
+        mutate(transcript=input$transcript,
+               feat_id=paste0(feature,"1")) %>%
         arrange(start)
     }
     
@@ -261,7 +264,10 @@ server <- function(input, output, session) {
   ## Dataset filtered by intronic profile
   filteredintron <- reactive({ 
     
-    if (is.null(input$retention_introns)) { return(NULL) }  
+    if (is.null(input$retention_introns)) { 
+      print("HERE")
+      return(NULL) 
+      }  
     filtered_df<- transcript_data()$COORDS_DF %>% 
       filter(retention_introns %in% as.vector(input$retention_introns)) %>%
       arrange(origin) %>%
@@ -286,21 +292,21 @@ server <- function(input, output, session) {
     
   })
   
-  ## get max number of reads by intronic profile (used to set plot's height)
+  ## get max number of reads by intronic profile (used to set plot's height) ----
   plotCountRead <- reactive({
     req(filteredintron())
     sum <- filteredintron() %>% 
-      group_by(origin) %>%
+      group_by(origin, retention_introns) %>%
       summarise(n_read=n())
-    
+    print(sum)
+
     return(max(sum$n_read))
   })
   
-  ## Set plot height
-  plotHeight <- reactive(10*plotCountRead()) 
-  
+  ## Set plot height ----
+  plotHeight <- reactive(plotCountRead()) 
   output$plotreads.ui <- renderUI({
-    plotOutput("plot_reads", height = plotHeight())
+    plotOutput("plot_reads", height = 2*plotHeight())
   })
 
 
@@ -466,10 +472,14 @@ server <- function(input, output, session) {
     GFF_DF <- transcript_data()$GFF_DF 
     gff_gene <- GFF_DF%>% filter(feat_type=="gene")
     gff_subgene <- GFF_DF%>% filter(feat_type=="subgene")
+    print("SUBGENE")
+    print(gff_subgene)
     parent_start <- gff_gene$start
     parent_stop <- gff_gene$end
     title <- paste(gff_gene$transcript, gff_gene$ROI)
-    
+    print(gff_gene)
+    print("########")
+    print(gff_subgene)
     ggplot() +
       # plot model gene...
       geom_gene_arrow(data=gff_gene,
@@ -492,7 +502,9 @@ server <- function(input, output, session) {
   ## plot for transcript by  selected intronic profile ----
   output$plot_reads <- renderPlot({
     req(transcript_data())
+    print("test?")
     coords_df <- filteredintron()
+    print("test!")
     validate(need(!is.null(input$retention_introns), "Please select a data set"))
     df_coords_gene <- coords_df %>% 
       filter(feat_type=="gene")
@@ -527,12 +539,7 @@ server <- function(input, output, session) {
     df_coords_transcript_subgene_tail <- rbind(df_coords_transcript_subgene, df_coords_tails)
     df_coords_transcript_subgene_tail$parent_start <- min(df_coords_transcript_subgene_tail$start, na.rm = T) -1
     df_coords_transcript_subgene_tail$parent_stop <- max(df_coords_transcript_subgene_tail$end, na.rm=T) +1
-    
-    # get limit of y axis
-    limy_df <- df_coords_transcript %>%
-      group_by(origin) %>%
-      summarise(nb_ID = n_distinct(ID))
-    
+
     # plot
     ggplot() +
       # plot all transcripts
@@ -554,6 +561,7 @@ server <- function(input, output, session) {
       
       #facet_grid(origin~retention_introns)
       facet_wrap(~origin, ncol = 1) +
+      theme_classic() +
       theme(legend.position="bottom") +
       theme(legend.background = element_rect(linewidth=0.5, linetype="solid")) +
       ggtitle(gene_name) 

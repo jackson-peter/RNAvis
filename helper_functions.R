@@ -103,9 +103,13 @@ build_coords_df <- function(transcript_df, GFF_DF, intron_cols) {
            start=as.numeric(read_start),
            end=as.numeric(read_end))
   
+  print("### head###")
+  print(head(transcript_df_coords))
+  print("/// head###")
+  
   if (length(intron_cols)>0) {
 
-    cols_to_keep <- c(intron_cols,"orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read",  "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type")
+    cols_to_keep <- c(intron_cols,"orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read",  "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type", "sample_id")
 
     # This data frame looks for the values of feat_id that are also column names (intron1 intron2 ...)
     # and checks whether it is retained or not.
@@ -115,6 +119,7 @@ build_coords_df <- function(transcript_df, GFF_DF, intron_cols) {
       mutate(retained = case_when(feature=="intron" ~ get(as.character(feat_id)),
                                   TRUE ~ FALSE)) %>%
       filter(retained==TRUE)
+
     
     transcript_df_coords<- transcript_df_coords %>%
       filter(feature!="intron") %>%
@@ -123,19 +128,18 @@ build_coords_df <- function(transcript_df, GFF_DF, intron_cols) {
     transcript_df_coords <- transcript_df_coords %>%dplyr::select(all_of(c(cols_to_keep)))%>%
       bind_rows(transcript_df_coords, to_rem, transcripts_df)%>%
       dplyr::select(-c(intron_cols))
+    
 
     
   } else  if (length(intron_cols)==0) {
-    cols_to_keep <- c("orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read", "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type")
+    cols_to_keep <- c("orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read", "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type", "sample_id")
 
     transcript_df_coords <-  bind_rows(transcript_df_coords, transcripts_df)
 
     transcript_df_coords<- transcript_df_coords %>%
       filter(feature!="intron") %>%
       mutate(retained=FALSE)
-    
-    print("éééééééé")
-    print(colnames(transcript_df_coords))
+
     transcript_df_coords <-  transcript_df_coords%>%
       dplyr::select(all_of(c(cols_to_keep)))%>%
       bind_rows(transcript_df_coords, transcripts_df)
@@ -170,11 +174,64 @@ build_coords_df <- function(transcript_df, GFF_DF, intron_cols) {
   
   transcript_df_coords <-  bind_rows(transcript_df_coords, polya_df, addtail_df)%>%
     arrange(read_core_id, start, end)
-  print(head(transcript_df_coords))
+
   
   return(transcript_df_coords)
   
 }
+
+
+build_intronic_profile_for_plot <- function(filteredintron) {
+  coords_df <- filteredintron
+  
+  df_coords_gene <- coords_df %>% 
+    filter(feat_type=="gene")
+  genotypes <- unique(coords_df$origin)
+  gene_name <- unique(df_coords_gene$mRNA)
+  
+  # gene: this is to have the 'model' of the intron profile
+  df_coords_gene <- df_coords_gene[!duplicated(df_coords_gene$mRNA, by=c("retention_introns", "origin")),]
+  df_coords_gene <- df_coords_gene[rep(seq_len(nrow(df_coords_gene)), each = length(genotypes)), ]
+  df_coords_gene$origin=genotypes
+  # subgene (intron exon)
+  df_coords_subgene <- coords_df %>% filter(feat_type=="subgene") %>%
+    mutate(parent_start=unique(df_coords_gene$start),
+           parent_stop=unique(df_coords_gene$end))
+  
+  # tail info
+  df_coords_tails <- coords_df %>% filter(feat_type=="tail") %>%
+    mutate(parent_start=unique(df_coords_gene$start),
+           parent_stop=unique(df_coords_gene$end))
+  
+  
+  # transcript
+  df_coords_transcript <- coords_df %>% 
+    filter(feat_type=="transcript") 
+  
+  
+  # filter subgene to remove introns/exons that exist in annotation but not present in read (ie not sequenced)
+  df_coords_transcript_subgene <- df_coords_subgene %>%
+    filter(start>=read_start,
+           end<=read_end)
+  
+  # combining dataframes
+  df_coords_transcript_subgene_tail <- rbind(df_coords_transcript_subgene, df_coords_tails)
+  df_coords_transcript_subgene_tail$parent_start <- NA
+  df_coords_transcript_subgene_tail$parent_stop <- NA
+  
+  # adjusting gene size to allow subgene tail which is by def. not within gene boundaries
+  df_coords_transcript_subgene_tail$parent_start <- min(df_coords_transcript_subgene_tail$start, na.rm = T) -1
+  df_coords_transcript_subgene_tail$parent_stop <- max(df_coords_transcript_subgene_tail$end, na.rm=T) +1
+  
+  intronic_profile_for_plot <- list(df_coords_transcript = df_coords_transcript, 
+                                    df_coords_transcript_subgene_tail = df_coords_transcript_subgene_tail, 
+                                    df_coords_gene = df_coords_gene,
+                                    df_coords_subgene=df_coords_subgene,
+                                    gene_name=gene_name)
+  
+  return(intronic_profile_for_plot)
+  
+} 
 
 #### UI ####
 

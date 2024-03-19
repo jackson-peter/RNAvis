@@ -82,7 +82,8 @@ body <-
                                     uiOutput("checkbox_introns")
                                     ) # /box
                        ),
-                       fluidRow(uiOutput("plotreads.ui"))
+                       
+                       plotOutput("plot_reads", width = "100%")
                        ), # /tabpanel
               tabPanel(h5("FLEPseq Results"),
                        box(width = 12, status = "primary", solidHeader = TRUE, title="Select a subsets of columns",
@@ -231,7 +232,10 @@ server <- function(input, output, session) {
     tryCatch(
       expr = {
         colnames(transcript_DF) <- column_names
-        transcript_DF <- transcript_DF %>% 
+        transcript_DF <- transcript_DF %>%
+          group_by(origin) %>% 
+          mutate(sample_id = row_number()) %>% 
+          ungroup() %>%
           mutate(Run=basename(global$datapath))%>%
           mutate(across(retention_introns, as.character))%>%
           mutate(retention_introns = replace_na(retention_introns, "none")) %>%
@@ -247,15 +251,14 @@ server <- function(input, output, session) {
           coords_df <- build_coords_df(transcript_DF, GFF_DF, vector()) 
         }
 
-        # Building coords df
-        coords_df <- coords_df %>%
-          group_by(read_id, origin, chr, read_start, read_end, retention_introns, polya_length, additional_tail) %>%
-          arrange(retention_introns, read_end-read_start, polya_length, str_length(additional_tail)) %>%
-          mutate(ID = cur_group_id())
         updateSelectizeInput(session, "column_sel", choices=colnames(transcript_DF))
       },
-      error = function(e){shinyalert("Erf!", paste("It seems that something went wrong", e), type = "error")}
+      error = function(e){
+        shinyalert("Erf!", paste("Something went wrong", e), type = "error")
+        print(e)}
+     
     )
+
     transcript_DATA <- list(transcript_DF = transcript_DF, GFF_DF = GFF_DF, COORDS_DF = coords_df)
     
     return(transcript_DATA)
@@ -264,15 +267,9 @@ server <- function(input, output, session) {
   ## Dataset filtered by intronic profile
   filteredintron <- reactive({ 
     
-    if (is.null(input$retention_introns)) { 
-      print("HERE")
-      return(NULL) 
-      }  
     filtered_df<- transcript_data()$COORDS_DF %>% 
-      filter(retention_introns %in% as.vector(input$retention_introns)) %>%
-      arrange(origin) %>%
-      group_by(ID, origin)
-
+        dplyr::filter(retention_introns %in% as.vector(input$retention_introns)) 
+    
     return(filtered_df)
 
 
@@ -292,24 +289,6 @@ server <- function(input, output, session) {
     
   })
   
-  ## get max number of reads by intronic profile (used to set plot's height) ----
-  plotCountRead <- reactive({
-    req(filteredintron())
-    sum <- filteredintron() %>% 
-      group_by(origin, retention_introns) %>%
-      summarise(n_read=n())
-    print(sum)
-
-    return(max(sum$n_read))
-  })
-  
-  ## Set plot height ----
-  plotHeight <- reactive(plotCountRead()) 
-  output$plotreads.ui <- renderUI({
-    plotOutput("plot_reads", height = 2*plotHeight())
-  })
-
-
   ### OBSERVERS ---------------------------------------------------------------
 
   ## Observer for selectdir. 
@@ -317,6 +296,7 @@ server <- function(input, output, session) {
                eventExpr = {input$selectdir},
                handlerExpr = {
                  # Sets paths variables
+                 
                  if (!input$selectdir == "") {
                    text_rundir(paste("Selected directory:",input$selectdir, sep=" ")) # set new value to reactiveVal
                    text_geno(unlist(genoSelect())) # set new value to reactiveVal
@@ -339,10 +319,12 @@ server <- function(input, output, session) {
                      shinyalert("Nice!", paste("Successfully added", tabix_files, sep="\n"), type = "success")
                      genes_list=unique(rbindlist(lapply(global$barcode_corr$gene_list, fread, header=F)))
                      updateSelectizeInput(session, 'transcript', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
+                  
                      
                    } 
                  }
                }) # end observer selectdir
+  
   
   ## Observer for transcript 
   observeEvent(ignoreNULL = TRUE,
@@ -472,14 +454,9 @@ server <- function(input, output, session) {
     GFF_DF <- transcript_data()$GFF_DF 
     gff_gene <- GFF_DF%>% filter(feat_type=="gene")
     gff_subgene <- GFF_DF%>% filter(feat_type=="subgene")
-    print("SUBGENE")
-    print(gff_subgene)
     parent_start <- gff_gene$start
     parent_stop <- gff_gene$end
     title <- paste(gff_gene$transcript, gff_gene$ROI)
-    print(gff_gene)
-    print("########")
-    print(gff_subgene)
     ggplot() +
       # plot model gene...
       geom_gene_arrow(data=gff_gene,
@@ -501,73 +478,35 @@ server <- function(input, output, session) {
   
   ## plot for transcript by  selected intronic profile ----
   output$plot_reads <- renderPlot({
-    req(transcript_data())
-    print("test?")
-    coords_df <- filteredintron()
-    print("test!")
-    validate(need(!is.null(input$retention_introns), "Please select a data set"))
-    df_coords_gene <- coords_df %>% 
-      filter(feat_type=="gene")
-    genotypes <- unique(coords_df$origin)
-    gene_name <- unique(df_coords_gene$mRNA)
+    req(filteredintron())
     
-    # gene
-    df_coords_gene <- df_coords_gene[!duplicated(df_coords_gene$mRNA, by=c("retention_introns", "origin")),]
-    df_coords_gene <- df_coords_gene[rep(seq_len(nrow(df_coords_gene)), each = length(genotypes)), ]
-    df_coords_gene$origin=genotypes
-    
-    # subgene (intron exon)
-    df_coords_subgene <- coords_df %>% filter(feat_type=="subgene") %>%
-      mutate(parent_start=unique(df_coords_gene$start),
-             parent_stop=unique(df_coords_gene$end))
-    
-    # tail info
-    df_coords_tails <- coords_df %>% filter(feat_type=="tail") %>%
-      mutate(parent_start=unique(df_coords_gene$start),
-             parent_stop=unique(end))
-    
-    # transcript
-    df_coords_transcript <- coords_df %>% 
-      filter(feat_type=="transcript") 
-    
-    # filter subgene to remove introns/exons that exist in annotation but not present in read (ie not sequenced)
-    df_coords_transcript_subgene <- df_coords_subgene %>%
-      filter(start>=read_start,
-             end<=read_end)
-    
-    # combining dataframes
-    df_coords_transcript_subgene_tail <- rbind(df_coords_transcript_subgene, df_coords_tails)
-    df_coords_transcript_subgene_tail$parent_start <- min(df_coords_transcript_subgene_tail$start, na.rm = T) -1
-    df_coords_transcript_subgene_tail$parent_stop <- max(df_coords_transcript_subgene_tail$end, na.rm=T) +1
+    validate(need(!is.null(input$retention_introns), "Please select an intron profile"))
+    total_data <- build_intronic_profile_for_plot(filteredintron())
 
     # plot
     ggplot() +
-      # plot all transcripts
-      geom_gene_arrow(data=df_coords_transcript,
-                      aes(xmin = start, xmax = end, y = -1*ID, forward=orientation), arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
-      # and their sub elements
-      geom_subgene_arrow(data = df_coords_transcript_subgene_tail,
-                         #aes(xmin = parent_start, xmax = parent_stop, y = ID, fill = feature,
-                         aes(xmin = parent_start, xmax = parent_stop, y = -1*ID,forward=orientation, fill = feature,
-                             xsubmin = start, xsubmax = end), color="black", alpha=.4, arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
+      # transcripts.....
+      geom_rect(data=total_data$df_coords_transcript,
+                aes(xmin = start, xmax = end, ymin = sample_id, ymax=sample_id + 0.5 ), fill="grey",alpha=.8)+
+      # .... annotated
+      geom_rect(data = total_data$df_coords_transcript_subgene_tail,
+                         aes(xmin = start, xmax = end, ymin = sample_id , ymax=sample_id +0.5,fill = feature), alpha=.8 ) +
       
-      # plot model gene...
-      geom_gene_arrow(data=df_coords_gene, 
-                      aes(xmin = start, xmax = end, y = 1,forward=orientation), fill = "white", arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
-      # ...annotated
-      geom_subgene_arrow(data = df_coords_subgene,
-                         aes(xmin = parent_start, xmax = parent_stop, y = 1, forward=orientation, fill = feature,
-                             xsubmin = start, xsubmax = end), color="black", arrowhead_height = unit(3, "mm"), arrowhead_width = unit(1, "mm")) +
-      
-      #facet_grid(origin~retention_introns)
+      # model gene ...
+      geom_rect(data=total_data$df_coords_gene, 
+                      aes(xmin = start, xmax = end, ymin = 0, ymax= 0.5), fill = "black") +
+      # ... annotated
+      geom_rect(data = total_data$df_coords_subgene,
+                        aes(xmin = start, xmax = end, ymin = 0, ymax= 0.5 , fill = feature)) +
+       
       facet_wrap(~origin, ncol = 1) +
       theme_classic() +
       theme(legend.position="bottom") +
       theme(legend.background = element_rect(linewidth=0.5, linetype="solid")) +
-      ggtitle(gene_name) 
+      ggtitle(total_data$gene_name) 
     
-  })
-
+  }, height=1500)
+ 
 } # /server
 
 # App calling ------------

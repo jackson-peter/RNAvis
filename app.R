@@ -91,7 +91,10 @@ body <-
                            actionButton(inputId = "update_cols",label = "Update columns")),
                        dataTableOutput("transcript_data_col_sel")
 
-                       ) # /tabPanel
+                       ), # /tabPanel
+              tabPanel(h5("PolyA Distribution"),
+                       plotOutput("polyA_distr_transcript")
+                       ) # /tabpanel
               ) # / tabsetpanel
 
             
@@ -430,6 +433,13 @@ server <- function(input, output, session) {
       geom_col(position = "dodge") +
       ggtitle("Mean mapping quality")+
       theme(legend.position = "none")
+  })
+  
+  ## polyA bulk distribution for single transcript ----
+  output$polyA_distr_transcript <- renderPlot({
+    req(transcript_data())
+    ggplot(transcript_data()$transcript_DF, aes(x=polya_length, color=origin)) +
+      geom_density()
   })
   
   ## polyA bulk distribution for multiple transcripts ----

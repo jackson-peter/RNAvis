@@ -1,4 +1,22 @@
 
+# load all libraries
+library(shiny)
+library(tidyverse)
+library(shinydashboard)
+library(data.table)
+library(shinyFiles)
+library(shinybusy)
+library(shinyalert)
+library(pbapply)
+library(cowplot)
+library(gggenes)
+library(GenomicRanges)
+library(shinyBS)
+library(DT)
+library(ggsci)
+library(markdown)
+library(shinyscreenshot)
+
 get_flepruns <- function(datasets_path) {
   flep_runs <- list.dirs(datasets_path, recursive = F, full.names = T)
   flep_runs_df <- as.data.frame(flep_runs) %>%

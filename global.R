@@ -3,23 +3,7 @@
 # unload all libraries
 #lapply(paste('package:',names(sessionInfo()$otherPkgs),sep=""),detach,character.only=TRUE,unload=TRUE)
 
-# load all libraries
-library(shiny)
-library(tidyverse)
-library(shinydashboard)
-library(data.table)
-library(shinyFiles)
-library(shinybusy)
-library(shinyalert)
-library(pbapply)
-library(cowplot)
-library(gggenes)
-library(GenomicRanges)
-library(shinyBS)
-library(DT)
-library(ggsci)
-library(markdown)
-library(shinyscreenshot)
+
 
 HTSLIB_PATH = "/shared/biotools/htslib/1.18/bin/"
 README="/shared/home/jpeter/Scripts/RNAvis/README.md"

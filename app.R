@@ -1,5 +1,6 @@
-source("global.R")
 source("helper_functions.R")
+source("global.R")
+
 
 
 theme_set(theme_bw())

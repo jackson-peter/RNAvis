@@ -64,6 +64,7 @@ read_tabixed_files_single_region <- function(file, transcript) {
 
 # Read only part of files containing users' transcript 
 read_tabixed_files_multiple_regions <- function(file, transcripts) {
+  print(transcripts)
   transcripts_string <- paste(unique(unlist(strsplit(transcripts, "\n"))), collapse = " ")
 
   dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, transcripts_string, "-h"), header = F)

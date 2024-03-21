@@ -129,7 +129,9 @@ body <-
               tabPanel(h5("FLEPseq results"),
                        box(width = 12, status = "primary", solidHeader = TRUE, title="Select a subset of columns",
                            selectizeInput('transcriptList_columnSel', "by default: all columns",choices=NULL, selected=NULL, multiple=T), # columns selector
-                           actionButton(inputId = "getFlepTable_list",label = "Get FLEPseq2 table")),
+                           actionButton(inputId = "getFlepTable_list",label = "Get FLEPseq2 table"),
+                           downloadButton("download_FlepTable_list", "Download")
+                           ),
                        dataTableOutput("FlepTable_list"),
               ), # / tabpanel
               tabPanel(h5("PolyA Distribution"),
@@ -199,7 +201,7 @@ server <- function(input, output, session) {
     tabixed_list <- global$sample_corr$tabix_file
     names(tabixed_list) <- global$sample_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
-    column_names <- names(fread(cmd = paste('head -n 1', global$sample_corr$tail_file[1])))
+    column_names <- names(fread(cmd = paste('zcat ',global$sample_corr$tabix_file[1],' | head -n 1')))
     column_names <- c('origin', column_names)
     transcripts_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_multiple_regions, transcripts=input$transcripts_sel), idcol = "origin")
     colnames(transcripts_DF) <- column_names
@@ -247,7 +249,7 @@ server <- function(input, output, session) {
     }
     
     # Building transcript dataset
-    column_names <- names(fread(cmd = paste('head -n 1', global$sample_corr$tail_file[1])))
+    column_names <- names(fread(cmd = paste('zcat ',global$sample_corr$tabix_file[1],' | head -n 1')))
     column_names <- c('origin', column_names)
     tabixed_list <- global$sample_corr$tabix_file
     names(tabixed_list) <- global$sample_corr$genotype
@@ -409,12 +411,25 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       # Write the dataset to the `file` that will be downloaded
-      write.tsv(filtereddata_single(), file)
+      write_tsv(filtereddata_single(), file)
     }
   )
   
   ## table with user-selected column (multiple transcripts) ----
   output$FlepTable_list  <- renderDataTable(filtereddata_list())
+  
+  output$download_FlepTable_list <- downloadHandler(
+    filename = function() {
+      # Use the selected dataset as the suggested file name
+      paste0(basename(input$runSelection),"_multiple_transcripts.tsv")
+    },
+    content = function(file) {
+      # Write the dataset to the `file` that will be downloaded
+      write_tsv(filtereddata_list(), file)
+    }
+  )
+  
+  
   
   ## GTF table ----
   output$GTFtable_single <- renderDataTable(
@@ -527,7 +542,7 @@ server <- function(input, output, session) {
                         aes(xmin = start, xmax = end, ymin = 0, ymax= 0.5 , fill = feature)) +
        
       facet_wrap(~origin, ncol = 1) +
-      theme(strip.background =element_rect(fill="orange"))+
+      theme(strip.background =element_rect(fill="darkgrey"))+
       theme(strip.text = element_text(colour = 'white')) +
       theme(legend.position="bottom") +
       theme(legend.background = element_rect(linewidth=0.5, linetype="solid")) +

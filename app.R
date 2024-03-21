@@ -1,7 +1,9 @@
-source("helper_functions.R")
 source("global.R")
+source("helper_functions.R")
+
 
 theme_set(theme_bw())
+print(README)
 
 # UI ###########################################################
 # header =======================================================
@@ -26,12 +28,14 @@ sidebar <-
     sidebarMenu(id = "tabs",
                 menuItem("Run Selection", tabName = 'runTab', icon = icon('gears'), selected=TRUE),
                 menuItem("Transcript-Specific", tabName = "transcriptSpecificTab", icon=icon("minus")),
-                menuItem("Transcripts List", tabName = "transcriptsListTab", icon=icon("list-ul"))
-                #menuItem("ReadMe", tabName = "readme", icon=icon("mortar-board")),
+                menuItem("Transcripts List", tabName = "transcriptsListTab", icon=icon("list-ul")),
+                menuItem("README", tabName = "readme", icon=icon("mortar-board"))
+                
                 #menuItem("About", tabName = "about", icon = icon("question"))
                 
     ), #/ sidebarmenu
-    hr()
+    hr(),
+    screenshotButton()
   ) #/ dashboardsidebar
 
 
@@ -45,9 +49,9 @@ body <-
     tabItem(tabName = "runTab",
             # Inputs box ---
             box(width = 12, status = "primary", solidHeader = TRUE, title="chose a FLEPseq run",
-                selectizeInput("selectdir", inputId = 'selectdir', label=NULL, choices = c("Choose one" = "", flep_runs), multiple = FALSE),
-                fluidRow(column(dataTableOutput("barcode_geno"), width=11)),
-                fluidRow(column(textOutput("rundir"),width=11)),
+                selectizeInput("runSelection", inputId = 'runSelection', label=NULL, choices = c("Choose a run" = "", flep_runs), multiple = FALSE),
+                fluidRow(column(dataTableOutput("sample_table"), width=11)),
+                fluidRow(column(textOutput("dirname"),width=11)),
                 fluidRow(column(textOutput("genotypes"),width=11))
                 ),# /box
             # plots about run
@@ -59,37 +63,44 @@ body <-
 
     ), # /tabitem dashboard
     
-    # Sidebar tab transcriptSpecific -----
+    # Sidebar tab transcriptSpecificTab -----
     tabItem(tabName = "transcriptSpecificTab",
             box(width = 12, 
                 status = "primary", 
                 solidHeader = TRUE, 
                 title="Select your Transcript of interest",
                 column(width=12,
-                       selectizeInput("transcript", inputId = 'transcript', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE))),
+                       selectizeInput("transcript_sel", inputId = 'transcript_sel', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE))),
                 column(width=3,
                        actionButton(inputId = "Submittranscript", label = "Get Data")),
-                column(width=12,
-                       textOutput("transcript"))
             ), # /box
             tabsetPanel(
               tabPanel(h5("Transcript Overview"),
                        plotOutput("plot_gene"),
-                       dataTableOutput("GFF_table")
+                       dataTableOutput("GTFtable_single")
                        ), # /tabpanel
               tabPanel(h5("Intronic Profiles"),
                        fluidRow(box(width=12, status="primary", solidHeader = T, title="Intronic profile selection", collapsible=T, collapsed=F,
                                     uiOutput("checkbox_introns")
                                     ) # /box
                        ),
+                       em("You can zoom in on the plot by first selecting an area of the plot and then by double-clicking on it."),
+                       plotOutput("plot_reads", width = "100%",
+                                  dblclick = "plot_reads_dblclick",
+                                  brush = brushOpts(
+                                    id = "plot_reads_brush",
+                                    resetOnNew = TRUE)
+                                  )
                        
-                       plotOutput("plot_reads", width = "100%")
+                       
                        ), # /tabpanel
               tabPanel(h5("FLEPseq Results"),
-                       box(width = 12, status = "primary", solidHeader = TRUE, title="Select a subsets of columns",
-                           selectizeInput('column_sel', NULL,choices=NULL, selected=NULL, multiple=T), # columns selector
-                           actionButton(inputId = "update_cols",label = "Update columns")),
-                       dataTableOutput("transcript_data_col_sel")
+                       box(width = 12, status = "primary", solidHeader = TRUE, title="Select a subset of columns",
+                           selectizeInput('singleTranscript_columnSel', "by default: all columns",choices=NULL, selected=NULL, multiple=T), # columns selector
+                           actionButton(inputId = "getFlepTable_single",label = "Get FLEPseq2 table"),
+                           downloadButton("download_FlepTable_single", "Download")
+                           ),
+                       dataTableOutput("FlepTable_single")
 
                        ), # /tabPanel
               tabPanel(h5("PolyA Distribution"),
@@ -97,33 +108,42 @@ body <-
                        ) # /tabpanel
               ) # / tabsetpanel
 
-            
-    ), #/ tabitem transcriptspecific
+    ), #/ tabitem transcriptspecificTab
     
-    # Sidebar tab transcriptlist -----
-    tabItem(tabName = "transcriptsListTab",
-            box(width = 12,
+    # Sidebar tab transcriptlistTab -----
+    tabItem(tabName = "transcriptsListTab",    
+            box(width = 12, 
                 status = "primary", 
-                solidHeader = TRUE, title="Select your Genes of interest",
+                solidHeader = TRUE, 
+                title="Select your transcripts of interest",
                 column(width=12,
-                       textAreaInput("transcripts", "Insert you transcripts ids list here (one by line)", width = "400px")),
+                       selectizeInput("transcripts_sel", inputId = 'transcripts_sel', label = NULL, choices = NULL, selected = NULL, multiple = TRUE, options = list(create = FALSE))),
                 column(width=3,
                        actionButton(inputId = "Submittranscripts", label = "Get Data")),
-                column(width=12,
-                       textOutput("transcripts"))
             ), # /box
             tabsetPanel(
-              tabPanel(h5("transcripts FLEPseq results"),
-                       dataTableOutput("multiple_transcripts_table")
-                       ), # / tabpanel
+              tabPanel(h5("Transcripts Overview"),
+                       #textOutput("test1"),
+                       dataTableOutput("GTFtable_list")
+              ), # /tabpanel
+              tabPanel(h5("FLEPseq results"),
+                       box(width = 12, status = "primary", solidHeader = TRUE, title="Select a subset of columns",
+                           selectizeInput('transcriptList_columnSel', "by default: all columns",choices=NULL, selected=NULL, multiple=T), # columns selector
+                           actionButton(inputId = "getFlepTable_list",label = "Get FLEPseq2 table")),
+                       dataTableOutput("FlepTable_list"),
+              ), # / tabpanel
               tabPanel(h5("PolyA Distribution"),
                        plotOutput("polyA_distr_transcripts")
-                       ) # /tabpanel
-                            
-
-            ) # / tabsetpanel
-
-    ) #/ tabitem transcriptlist
+              ) # /tabpanel
+            )
+    
+    ), #/ tabitem transcriptlistTab
+    tabItem(tabName="readme",
+            tabsetPanel(
+              fluidRow(includeMarkdown(README))
+              )
+            )
+    
 
   ) #/ tabitems
 ) #/ dashboardbody 
@@ -146,12 +166,15 @@ server <- function(input, output, session) {
   global <- reactiveValues(datapath = getwd())
   
   ### REACTIVE DATA ------------------------------------------------------------
+  
+  # Single zoomable plot
+  ranges <- reactiveValues(x = NULL, y = NULL)
 
   ## Mapping data (coverage etc...)
-  MAP_data <- eventReactive(input$selectdir,{
-    req(global$barcode_corr)
-    map_files <- global$barcode_corr$map_file
-    names(map_files) <- global$barcode_corr$genotype
+  MAP_data <- eventReactive(input$runSelection,{
+    req(global$sample_corr)
+    map_files <- global$sample_corr$map_file
+    names(map_files) <- global$sample_corr$genotype
     mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "origin") %>%
       filter(origin %in% genoSelect())
   })
@@ -163,7 +186,7 @@ server <- function(input, output, session) {
       if(input[[i]]==T){
         index=as.numeric(substr(i,gregexpr(pattern = "_",i)[[1]]+1,nchar(i)))
         
-        return(global$barcode_corr$genotype[index])
+        return(global$sample_corr$genotype[index])
       }
     })))
     
@@ -171,27 +194,32 @@ server <- function(input, output, session) {
   
   ## Dataset for list of transcripts
   transcripts_data <- eventReactive(input$Submittranscripts, {
-    req(input$selectdir, input$transcripts)
-    tabixed_list <- global$barcode_corr$tabix_file
-    names(tabixed_list) <- global$barcode_corr$genotype
+    req(input$runSelection, input$transcripts_sel)
+    GTF_DF <- rbindlist(lapply(input$transcripts_sel, read_GTF_file, gtf=ref_gtf))
+    tabixed_list <- global$sample_corr$tabix_file
+    names(tabixed_list) <- global$sample_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
-    column_names <- names(fread(cmd = paste('head -n 1', global$barcode_corr$tail_file[1])))
+    column_names <- names(fread(cmd = paste('head -n 1', global$sample_corr$tail_file[1])))
     column_names <- c('origin', column_names)
-    transcripts_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_multiple_regions, transcripts=input$transcripts), idcol = "origin")
+    transcripts_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_multiple_regions, transcripts=input$transcripts_sel), idcol = "origin")
     colnames(transcripts_DF) <- column_names
     transcripts_DF <- transcripts_DF %>%
-      filter(origin %in% genoSelect()) 
+      filter(origin %in% genoSelect())
+    updateSelectizeInput(session, "transcriptList_columnSel", choices=colnames(transcripts_DF))
+    shinyalert("Nice!", paste(nrow(transcripts_DF), "transcripts in table"), type = "success")
+    transcripts_DATA <- list(transcripts_DF = transcripts_DF, GTF_DF = GTF_DF)
+    
+    return(transcripts_DATA)
 
-    return(transcripts_DF)
   })
   
-  ## transcript specific data (FLEPseq results, gff and coordinates)
+  ## transcript specific data (FLEPseq results, gtf and coordinates)
   transcript_data <- eventReactive(input$Submittranscript,{
-    req(input$selectdir, input$transcript)
-    # GFF gymnastics to handle introns
-    gff_infos <- read_GFF_file(ref_gff, input$transcript)
-    mRNA_df <- gff_infos %>% filter(feature=="mRNA")
-    exon_df <- gff_infos %>% filter(feature=="exon")
+    req(input$runSelection, input$transcript_sel)
+    # GTF gymnastics to handle introns
+    gtf_infos <- read_GTF_file(ref_gtf, input$transcript_sel)
+    mRNA_df <- gtf_infos %>% filter(feature=="mRNA")
+    exon_df <- gtf_infos %>% filter(feature=="exon")
     mRNA_GR <- GRanges(mRNA_df$ROI)
     exon_GR <- GRanges(exon_df$ROI)
     # if several exons(and therefore introns)
@@ -200,33 +228,33 @@ server <- function(input, output, session) {
         mutate(feature="intron",
                feat_type="subgene",
                ROI=paste0(seqnames, ":", start,"-", end),
-               orientation=unique(gff_infos$orientation),
-               strand=unique(gff_infos$strand),
-               source=unique(gff_infos$source))
+               orientation=unique(gtf_infos$orientation),
+               strand=unique(gtf_infos$strand),
+               source=unique(gtf_infos$source))
       
-      GFF_DF <- rbind(gff_infos, introns_regions, fill=T) %>%
+      GTF_DF <- rbind(gtf_infos, introns_regions, fill=T) %>%
         group_by(feature) %>%
-        mutate(transcript=input$transcript,
+        mutate(transcript=input$transcript_sel,
                feat_id=case_when(orientation==0 ~paste0(feature, rev(seq_along(feature))),
                                  orientation==1 ~paste0(feature, seq_along(feature))))%>%
         arrange(start)
     # if only one exon
     } else {
-      GFF_DF <- gff_infos %>%
-        mutate(transcript=input$transcript,
+      GTF_DF <- gtf_infos %>%
+        mutate(transcript=input$transcript_sel,
                feat_id=paste0(feature,"1")) %>%
         arrange(start)
     }
     
     # Building transcript dataset
-    column_names <- names(fread(cmd = paste('head -n 1', global$barcode_corr$tail_file[1])))
+    column_names <- names(fread(cmd = paste('head -n 1', global$sample_corr$tail_file[1])))
     column_names <- c('origin', column_names)
-    tabixed_list <- global$barcode_corr$tabix_file
-    names(tabixed_list) <- global$barcode_corr$genotype
+    tabixed_list <- global$sample_corr$tabix_file
+    names(tabixed_list) <- global$sample_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
     tryCatch(
       {
-        transcript_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_single_region, transcript=input$transcript), idcol = "origin")
+        transcript_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_single_region, transcript=input$transcript_sel), idcol = "origin")
         shinyalert("Nice!", paste(nrow(transcript_DF), "transcripts in table"), type = "success")
       },
       error = function(cond) {shinyalert("OUCH", paste("Error:", cond), type = "error")}
@@ -249,12 +277,12 @@ server <- function(input, output, session) {
           intron_cols <- paste0("intron",1:n_introns)
           setDT(transcript_DF)
           transcript_DF <- transcript_DF[, paste(intron_cols) := lapply(paste(intron_cols), getIntronsRetained, retained_introns = as.character(retention_introns)), by = retention_introns]
-          coords_df <- build_coords_df(transcript_DF, GFF_DF, intron_cols) 
+          coords_df <- build_coords_df(transcript_DF, GTF_DF, intron_cols) 
         } else {
-          coords_df <- build_coords_df(transcript_DF, GFF_DF, vector()) 
+          coords_df <- build_coords_df(transcript_DF, GTF_DF, vector()) 
         }
 
-        updateSelectizeInput(session, "column_sel", choices=colnames(transcript_DF))
+        updateSelectizeInput(session, "singleTranscript_columnSel", choices=colnames(transcript_DF))
       },
       error = function(e){
         shinyalert("Erf!", paste("Something went wrong", e), type = "error")
@@ -262,7 +290,7 @@ server <- function(input, output, session) {
      
     )
 
-    transcript_DATA <- list(transcript_DF = transcript_DF, GFF_DF = GFF_DF, COORDS_DF = coords_df)
+    transcript_DATA <- list(transcript_DF = transcript_DF, GTF_DF = GTF_DF, COORDS_DF = coords_df)
     
     return(transcript_DATA)
   })
@@ -278,15 +306,29 @@ server <- function(input, output, session) {
 
   })
   
-  ## Dataset column subsets
-  filtereddata <- eventReactive(input$update_cols,{
+  ## Dataset column subsets (1 transcript) ----
+  filtereddata_single <- eventReactive(input$getFlepTable_single,{
     
-    if (is.null(input$column_sel)) {
+    if (is.null(input$singleTranscript_columnSel)) {
       filtereddata <- transcript_data()$transcript_DF
     } else {
       filtereddata <- transcript_data()$transcript_DF%>% 
         ungroup()%>%
-        select(input$column_sel)
+        select(input$singleTranscript_columnSel)
+    }
+    return(filtereddata)
+    
+  })
+  
+  ## Dataset column subsets (multiple transcripts) ----
+  filtereddata_list <- eventReactive(input$getFlepTable_list,{
+    
+    if (is.null(input$transcriptList_columnSel)) {
+      filtereddata <- transcripts_data()$transcripts_DF
+    } else {
+      filtereddata <- transcripts_data()$transcripts_DF%>% 
+        ungroup()%>%
+        select(input$transcriptList_columnSel)
     }
     return(filtereddata)
     
@@ -294,91 +336,59 @@ server <- function(input, output, session) {
   
   ### OBSERVERS ---------------------------------------------------------------
 
-  ## Observer for selectdir. 
+  ## Observer for runSelection. 
   observeEvent(ignoreNULL = TRUE,
-               eventExpr = {input$selectdir},
+               eventExpr = {input$runSelection},
                handlerExpr = {
                  # Sets paths variables
                  
-                 if (!input$selectdir == "") {
-                   text_rundir(paste("Selected directory:",input$selectdir, sep=" ")) # set new value to reactiveVal
-                   text_geno(unlist(genoSelect())) # set new value to reactiveVal
-                   global$datapath <- input$selectdir
-                   
+                 if (!input$runSelection == "") {
+
+                   global$datapath <- input$runSelection
                    tail_files <- list.files(path=file.path(global$datapath,tail_dir), pattern = paste0(tail_ext, "$"),full.names = T)
-                   barcode_file <- list.files(path=global$datapath, pattern=sample_table, full.names = T)
+                   
+                   sample_file <- list.files(path=global$datapath, pattern=sample_table, full.names = T)
                    mapping_files <- list.files(path=file.path(global$datapath,mapping_dir), pattern=paste0(mapping_ext, "$"), full.names=T)
                    
                    if (length(tail_files)>0) {
-                     global$barcode_corr <- fread(barcode_file, col.names = c("barcode", "genotype"), header = F) %>%
-                       mutate(tabix_file= file.path(global$datapath, tail_dir, paste0(barcode, index_ext)),
-                              tail_file=file.path(global$datapath, tail_dir, paste0(barcode, tail_ext)),
-                              map_file=file.path(global$datapath, mapping_dir, paste0(barcode, mapping_ext)),
-                              gene_list=file.path(global$datapath, tail_dir, paste0(barcode, tabix_l_ext)))
+                     global$sample_corr <- fread(sample_file, col.names = c("sample", "genotype"), header = F) %>%
+                       mutate(tabix_file= file.path(global$datapath, tail_dir, paste0(sample, index_ext)),
+                              tail_file=file.path(global$datapath, tail_dir, paste0(sample, tail_ext)),
+                              map_file=file.path(global$datapath, mapping_dir, paste0(sample, mapping_ext)),
+                              gene_list=file.path(global$datapath, tail_dir, paste0(sample, tabix_l_ext)))
                      
                      # Check if files are tabixed, and tabix them if not
-                     apply(global$barcode_corr[,c('tabix_file','tail_file')], 1, function(y) check_if_tabixed(y['tabix_file'],y['tail_file']))
-                     tabix_files <- paste(basename(global$barcode_corr$tail_file), collapse='\n')
-                     shinyalert("Nice!", paste("Successfully added", tabix_files, sep="\n"), type = "success")
-                     genes_list=unique(rbindlist(lapply(global$barcode_corr$gene_list, fread, header=F)))
-                     updateSelectizeInput(session, 'transcript', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
-                  
+                     apply(global$sample_corr[,c('tabix_file','tail_file')], 1, function(y) check_if_tabixed(y['tabix_file'],y['tail_file']))
                      
-                   } 
-                 }
-               }) # end observer selectdir
-  
-  
-  ## Observer for transcript 
-  observeEvent(ignoreNULL = TRUE,
-               eventExpr = {input$transcript},
-               handlerExpr = {
-                 if (!input$selectdir == "") {
-                   text_transcript(paste("Selected gene:",input$transcript, sep=" "))
+                   }  else {
+                     global$sample_corr <- fread(sample_file, col.names = c("sample", "genotype"), header = F) %>%
+                       mutate(tabix_file= file.path(global$datapath, tail_dir, paste0(sample, index_ext)),
+                              map_file=file.path(global$datapath, mapping_dir, paste0(sample, mapping_ext)),
+                              gene_list=file.path(global$datapath, tail_dir, paste0(sample, tabix_l_ext)))
+                                          
+                   }
+                   tabix_files <- paste(basename(global$sample_corr$tabix_file), collapse='\n')
+                   shinyalert("Nice!", paste("Successfully added", tabix_files, sep="\n"), type = "success")
+                   genes_list=unique(rbindlist(lapply(global$sample_corr$gene_list, fread, header=F)))
+                   updateSelectizeInput(session, 'transcript_sel', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
+                   updateSelectizeInput(session, 'transcripts_sel', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
                    
-                }
-               })
-  
-  ## Observer for transcripts list 
-  observeEvent(ignoreNULL = TRUE,
-               eventExpr = {input$transcripts},
-               handlerExpr = {
-                 if (!input$selectdir == "") {
-                   text_transcripts(paste("Selected genes:",input$transcripts, sep=" "))
                    
                  }
-               })
-
-
+               }) # end observer runSelection
+  
+  
 
   ### OUTPUTS ---------------------------------------------------------------
-  
+
   ## intronic profile selection (radiobuttons) ----
   output$checkbox_introns <- renderUI(radioButtons('retention_introns', 'Select Retention intron', choices =unique(transcript_data()$transcript_DF$retention_introns), inline = T))
 
-  ## selected directory path ----
-  text_rundir <- reactiveVal('Please select a directory')
-  output$rundir <- renderText({text_rundir()}) #output$rundir
   
-  ## selected transcript (1) ----
-  text_transcript <- reactiveVal('Please select a gene')
-  output$transcript <- renderText({text_transcript()}) #output$transcript
-  
-  ##  selected transcripts (list) ----
-  text_transcripts <- reactiveVal('Please select genes')
-  output$transcripts <- renderText({text_transcripts()}) #output$transcripts
-  
-  ## selected genotypes ----
-  text_geno <- reactiveVal('Please select genotypes')
-  output$genotypes <- renderText({text_geno()}) #output$geno
-  
-  
-  ## table of samples ----
-  selected_samples <- reactive({input$selected_graph})
-  output$barcode_geno = DT::renderDataTable({
-    req(global$barcode_corr$genotype)
-    #Display table with checkbox buttons
-    DT::datatable(cbind(Pick=shinyInput(checkboxInput,"srows_",length(global$barcode_corr$genotype),value=TRUE,width=1), global$barcode_corr),
+  output$sample_table = DT::renderDataTable({
+    req(global$sample_corr$genotype)
+
+    DT::datatable(cbind(Pick=shinyInput(checkboxInput,"srows_",length(global$sample_corr$genotype),value=TRUE,width=1), global$sample_corr),
                   options = list(orderClasses = TRUE,
                                  lengthMenu = c(5, 25, 50),
                                  pageLength = 25 ,
@@ -386,21 +396,35 @@ server <- function(input, output, session) {
                                    'function(settings) {
                                      Shiny.bindAll(this.api().table().node());}')
                   ),selection='none',escape=F)
+
   })
   
-  ## table with user-selected column ----
-  output$transcript_data_col_sel  <- renderDataTable(filtereddata())
+  ## table with user-selected column (1 transcript) ----
+  output$FlepTable_single  <- renderDataTable(filtereddata_single())
   
-  ## GFF table ----
-  output$GFF_table <- renderDataTable(
-    req(transcript_data()$GFF_DF ),
+  output$download_FlepTable_single <- downloadHandler(
+    filename = function() {
+      # Use the selected dataset as the suggested file name
+      paste0(basename(input$runSelection),"_", input$transcript_sel, ".tsv")
+    },
+    content = function(file) {
+      # Write the dataset to the `file` that will be downloaded
+      write.tsv(filtereddata_single(), file)
+    }
+  )
+  
+  ## table with user-selected column (multiple transcripts) ----
+  output$FlepTable_list  <- renderDataTable(filtereddata_list())
+  
+  ## GTF table ----
+  output$GTFtable_single <- renderDataTable(
+    req(transcript_data()$GTF_DF ),
     options = list(pageLength = 50)
   )
   
-  ##  table for multiple transcripts ----
-  output$multiple_transcripts_table <- renderDataTable(
-    req(transcripts_data()),
-    options = list(pageLength = 100)
+  output$GTFtable_list <- renderDataTable(
+    req(transcripts_data()$GTF_DF ),
+    options = list(pageLength = 50)
   )
   
   ## coverage plot ----
@@ -413,6 +437,7 @@ server <- function(input, output, session) {
     ggplot(cov, aes(x=rname, y=mean_cov, fill=origin)) +
       geom_col(position = "dodge") +
       ggtitle("Mean coverage") +
+      ggcustom_theme +
       theme(
         legend.position = c(.05, .95),
         legend.justification = c("left", "top"),
@@ -432,61 +457,53 @@ server <- function(input, output, session) {
     ggplot(cov, aes(x=rname, y=mean_mapq, fill=origin)) +
       geom_col(position = "dodge") +
       ggtitle("Mean mapping quality")+
+      ggcustom_theme +
       theme(legend.position = "none")
   })
   
   ## polyA bulk distribution for single transcript ----
   output$polyA_distr_transcript <- renderPlot({
     req(transcript_data())
-    ggplot(transcript_data()$transcript_DF, aes(x=polya_length, color=origin)) +
-      geom_density()
+    plot_polya_bulk(transcript_data()$transcript_DF)
   })
   
   ## polyA bulk distribution for multiple transcripts ----
   output$polyA_distr_transcripts <- renderPlot({
     req(transcripts_data())
-    ggplot(transcripts_data(), aes(x=polya_length, color=origin)) +
-      geom_density()
+    plot_polya_bulk(transcripts_data()$transcripts_DF)
+    
   })
   
-  ## poly a "intergenic" distribution for multiple transcripts ----
-  output$polyA_distr_transcripts_permrna <- renderPlot({
-    req(transcripts_data())
-    ggplot(transcripts_data() %>% 
-             group_by(mRNA) %>%
-             summarise(), aes(x=polya_length, color=origin)) +
-      geom_density()
-  })
   
   ## gene plot ----
   output$plot_gene <- renderPlot({
     req(transcript_data())
-    GFF_DF <- transcript_data()$GFF_DF 
-    gff_gene <- GFF_DF%>% filter(feat_type=="gene")
-    gff_subgene <- GFF_DF%>% filter(feat_type=="subgene")
-    parent_start <- gff_gene$start
-    parent_stop <- gff_gene$end
-    title <- paste(gff_gene$transcript, gff_gene$ROI)
+    GTF_DF <- transcript_data()$GTF_DF 
+    gtf_gene <- GTF_DF%>% filter(feat_type=="gene")
+    gtf_subgene <- GTF_DF%>% filter(feat_type=="subgene")
+    parent_start <- gtf_gene$start
+    parent_stop <- gtf_gene$end
+    title <- paste(gtf_gene$transcript, gtf_gene$ROI)
     ggplot() +
       # plot model gene...
-      geom_gene_arrow(data=gff_gene,
+      geom_gene_arrow(data=gtf_gene,
                       aes(xmin = start, xmax = end, y = seqnames,forward=orientation), fill = "white") +
       # ...annotated
-      geom_subgene_arrow(data = gff_subgene,
+      geom_subgene_arrow(data = gtf_subgene,
                          aes(xmin = parent_start, xmax = parent_stop, y = 1, forward=orientation, fill = feature,
                              xsubmin = start, xsubmax = end), color="black") +
       geom_subgene_label(
-        data = gff_subgene,
+        data = gtf_subgene,
         aes(y= seqnames, xsubmin = start, xsubmax = end, label = feat_id),
         min.size = 0
       ) +
       ggtitle(title) +
-      theme(legend.position="bottom") +
-      theme_void()
+      theme(legend.position="bottom")
 
   })
   
-  ## plot for transcript by  selected intronic profile ----
+  
+  ## plot reads (intronic profile) ----
   output$plot_reads <- renderPlot({
     req(filteredintron())
     
@@ -504,18 +521,35 @@ server <- function(input, output, session) {
       
       # model gene ...
       geom_rect(data=total_data$df_coords_gene, 
-                      aes(xmin = start, xmax = end, ymin = 0, ymax= 0.5), fill = "black") +
+                      aes(xmin = start, xmax = end, ymin = 0, ymax= 0.5), color = "black") +
       # ... annotated
       geom_rect(data = total_data$df_coords_subgene,
                         aes(xmin = start, xmax = end, ymin = 0, ymax= 0.5 , fill = feature)) +
        
       facet_wrap(~origin, ncol = 1) +
-      theme_classic() +
+      theme(strip.background =element_rect(fill="orange"))+
+      theme(strip.text = element_text(colour = 'white')) +
       theme(legend.position="bottom") +
       theme(legend.background = element_rect(linewidth=0.5, linetype="solid")) +
-      ggtitle(total_data$gene_name) 
+      ggtitle(total_data$gene_name) +
+      coord_cartesian(xlim = ranges$x, ylim = ranges$y, expand = FALSE)
     
-  }, height=1500)
+  }, height = 1500)
+  
+  
+  # When a double-click happens, check if there's a brush on the plot.
+  # If so, zoom to the brush bounds; if not, reset the zoom.
+  observeEvent(input$plot_reads_dblclick, {
+    brush <- input$plot_reads_brush
+    if (!is.null(brush)) {
+      ranges$x <- c(brush$xmin, brush$xmax)
+      ranges$y <- c(brush$ymin, brush$ymax)
+      
+    } else {
+      ranges$x <- NULL
+      ranges$y <- NULL
+    }
+  })
  
 } # /server
 

@@ -30,7 +30,7 @@ sort_and_tabix <- function(tail_f) {
   tabix_l_file <- gsub(tail_ext, tabix_l_ext, tail_f)
   tail_f_gz <- paste0(tail_f_sorted, ".gz")
   sort_cmd=paste0("{ head -n 1 ",tail_f, " && tail -n +2 ", tail_f, " | sort -k",transcript_col," -k",start_col,"n,",end_col,"n; } > ", tail_f_sorted)
-  tabix_cmd <- paste(bgzip, tail_f_sorted, "&&",  tabix, tail_f_gz, "-S 1 -s",transcript_col,"-b",start_col,"-e",end_col)
+  tabix_cmd <- paste(bgzip, "-I 9", tail_f_sorted, "&&",  tabix, tail_f_gz, "-S 1 -s",transcript_col,"-b",start_col,"-e",end_col)
   
   tabix_l_cmd <- paste(tabix, "-l", tail_f_gz, ">", tabix_l_file)
   system(sort_cmd)
@@ -41,6 +41,8 @@ sort_and_tabix <- function(tail_f) {
 
 # Check if tabixed and tabix if not
 check_if_tabixed <- function(tabix_file,tail_file, index=".tbi") {
+  print("###")
+  print(tail_file)
   if (!file.exists(tail_file)) {
     shinyalert("OUCH", paste("THERE IS NO", tail_file), type = "error")
   }
@@ -67,11 +69,12 @@ read_tabixed_files_multiple_regions <- function(file, transcripts) {
   dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, transcripts_string, "-h"), header = F)
   }
 
-# Read GFF file for specified transcript
-read_GFF_file <- function(gff, transcript) {
-  #dt <- fread(cmd = paste("grep", transcript, gff, "| grep -P 'mRNA|exon|five_prime_UTR|three_prime_UTR'"), col.names = gff_colnames) %>%
-  dt <- fread(cmd = paste("grep", transcript, gff, "| grep -P 'mRNA|exon'"), col.names = gff_colnames) %>%
-    mutate(orientation=case_when(strand=='-' ~ 0,
+# Read GTF file for specified transcript
+read_GTF_file <- function(gtf, transcript) {
+  #dt <- fread(cmd = paste("grep", transcript, gtf, "| grep -P 'mRNA|exon|five_prime_UTR|three_prime_UTR'"), col.names = gtf_colnames) %>%
+  dt <- fread(cmd = paste("grep", transcript, gtf, "| grep -P 'mRNA|exon'"), col.names = gtf_colnames) %>%
+    mutate(transcript=transcript,
+           orientation=case_when(strand=='-' ~ 0,
                                  strand=='+' ~ 1),
            feat_type =case_when(feature=="mRNA" ~ "gene",
                                 TRUE ~ "subgene"),
@@ -86,15 +89,12 @@ getIntronsRetained <- function(intron_name, retained_introns){
   
 }
 
-build_coords_df <- function(transcript_df, GFF_DF, intron_cols) {
-  
-  print("building coords")
-
+build_coords_df <- function(transcript_df, GTF_DF, intron_cols) {
   transcript_df_coords <- transcript_df  %>%
-    left_join(GFF_DF, by = c("mRNA"="transcript"), relationship = "many-to-many") %>%
+    left_join(GTF_DF, by = c("mRNA"="transcript"), relationship = "many-to-many") %>%
     separate(read_core_id, into=c("read_id", "chr", "read_start", "read_end"), sep = ',' , remove = F, convert = T) %>%
     mutate(addtail_nchar =nchar(additional_tail))
-  transcript_df_coords$orientation=unique(GFF_DF$orientation)
+  transcript_df_coords$orientation=unique(GTF_DF$orientation)
   transcripts_df <- transcript_df_coords %>%
     filter(feature=="mRNA") %>%
     mutate(feature="transcript",
@@ -103,9 +103,6 @@ build_coords_df <- function(transcript_df, GFF_DF, intron_cols) {
            start=as.numeric(read_start),
            end=as.numeric(read_end))
   
-  print("### head###")
-  print(head(transcript_df_coords))
-  print("/// head###")
   
   if (length(intron_cols)>0) {
 
@@ -233,7 +230,20 @@ build_intronic_profile_for_plot <- function(filteredintron) {
   
 } 
 
+
+plot_polya_bulk <- function(dataset) {
+  ggplot(dataset, aes(x=polya_length, color=origin, fill=origin)) +
+    geom_density(alpha=0.5)+
+    ggcustom_theme 
+}
+
 #### UI ####
+
+ggcustom_theme <- list(
+  theme_bw(),
+  scale_color_jco(),
+  scale_fill_jco()
+)
 
 dropdownMenuCustom <-     function (..., type = c("messages", "notifications", "tasks"), 
                                     badgeStatus = "primary", icon = NULL, .list = NULL, customSentence = customSentence) 

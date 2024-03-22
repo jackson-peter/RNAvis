@@ -105,7 +105,11 @@ body <-
 
                        ), # /tabPanel
               tabPanel(h5("PolyA Distribution"),
-                       plotOutput("polyA_distr_transcript")
+                       plotOutput("polyaDistr_single",
+                                  dblclick = "polyaDistr_single_dblclick",
+                                  brush = brushOpts(
+                                    id = "polyaDistr_single_brush",
+                                    resetOnNew = TRUE))
                        ) # /tabpanel
               ) # / tabsetpanel
 
@@ -136,7 +140,11 @@ body <-
                        dataTableOutput("FlepTable_list"),
               ), # / tabpanel
               tabPanel(h5("PolyA Distribution"),
-                       plotOutput("polyA_distr_transcripts")
+                       plotOutput("polyaDistr_list",
+                                  dblclick = "polyaDistr_list_dblclick",
+                                  brush = brushOpts(
+                                    id = "polyaDistr_list_brush",
+                                    resetOnNew = TRUE))
               ) # /tabpanel
             )
     
@@ -478,15 +486,20 @@ server <- function(input, output, session) {
   })
   
   ## polyA bulk distribution for single transcript ----
-  output$polyA_distr_transcript <- renderPlot({
+  output$polyaDistr_single <- renderPlot({
     req(transcript_data())
-    plot_polya_bulk(transcript_data()$transcript_DF)
+    polya_bulk <- plot_polya_bulk(transcript_data()$transcript_DF)
+    polya_bulk+
+      coord_cartesian(xlim = ranges$x_polyaDistr_single, ylim = ranges$y_polyaDistr_single, expand = FALSE)
+      
   })
   
   ## polyA bulk distribution for multiple transcripts ----
-  output$polyA_distr_transcripts <- renderPlot({
+  output$polyaDistr_list <- renderPlot({
     req(transcripts_data())
-    plot_polya_bulk(transcripts_data()$transcripts_DF)
+    polya_bulk <- plot_polya_bulk(transcripts_data()$transcripts_DF)
+    polya_bulk+
+      coord_cartesian(xlim = ranges$x_polyaDistr_list, ylim = ranges$y_polyaDistr_list, expand = FALSE)
     
   })
   
@@ -548,22 +561,46 @@ server <- function(input, output, session) {
       theme(legend.position="bottom") +
       theme(legend.background = element_rect(linewidth=0.5, linetype="solid")) +
       ggtitle(total_data$gene_name) +
-      coord_cartesian(xlim = ranges$x, ylim = ranges$y, expand = FALSE)
+      coord_cartesian(xlim = ranges$x_plot_reads, ylim = ranges$y_plot_reads, expand = FALSE)
     
   }, height = 1500)
   
+
+  observeEvent(input$polyaDistr_list_dblclick, {
+    polyaDistr_list_brush <- input$polyaDistr_list_brush
+    if (!is.null(polyaDistr_list_brush)) {
+      ranges$x_polyaDistr_list <- c(polyaDistr_list_brush$xmin, polyaDistr_list_brush$xmax)
+      ranges$y_polyaDistr_list <- c(polyaDistr_list_brush$ymin, polyaDistr_list_brush$ymax)
+      
+    } else {
+      ranges$x_polyaDistr_list <- NULL
+      ranges$y_polyaDistr_list <- NULL
+    }
+  })
   
   # When a double-click happens, check if there's a brush on the plot.
   # If so, zoom to the brush bounds; if not, reset the zoom.
   observeEvent(input$plot_reads_dblclick, {
-    brush <- input$plot_reads_brush
-    if (!is.null(brush)) {
-      ranges$x <- c(brush$xmin, brush$xmax)
-      ranges$y <- c(brush$ymin, brush$ymax)
+    plot_reads_brush <- input$plot_reads_brush
+    if (!is.null(plot_reads_brush)) {
+      ranges$x_plot_reads <- c(plot_reads_brush$xmin, plot_reads_brush$xmax)
+      ranges$y_plot_reads <- c(plot_reads_brush$ymin, plot_reads_brush$ymax)
       
     } else {
-      ranges$x <- NULL
-      ranges$y <- NULL
+      ranges$x_plot_reads <- NULL
+      ranges$y_plot_reads <- NULL
+    }
+  })
+  
+  observeEvent(input$polyaDistr_single_dblclick, {
+    polyaDistr_single_brush <- input$polyaDistr_single_brush
+    if (!is.null(polyaDistr_single_brush)) {
+      ranges$x_polyaDistr_single <- c(polyaDistr_single_brush$xmin, polyaDistr_single_brush$xmax)
+      ranges$y_polyaDistr_single <- c(polyaDistr_single_brush$ymin, polyaDistr_single_brush$ymax)
+      
+    } else {
+      ranges$x_polyaDistr_single <- NULL
+      ranges$y_polyaDistr_single <- NULL
     }
   })
  

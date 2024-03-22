@@ -251,9 +251,10 @@ build_intronic_profile_for_plot <- function(filteredintron) {
 
 
 plot_polya_bulk <- function(dataset) {
-  ggplot(dataset, aes(x=polya_length, color=origin, fill=origin)) +
+  polya_bulk <- ggplot(dataset, aes(x=polya_length, color=origin, fill=origin)) +
     geom_density(alpha=0.5)+
     ggcustom_theme 
+  return(polya_bulk)
 }
 
 #### UI ####

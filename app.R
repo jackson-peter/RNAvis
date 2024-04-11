@@ -1,13 +1,10 @@
 source("helper_functions.R")
 source("global.R")
 
-
-
 theme_set(theme_bw())
-print(README)
 
 # UI ###########################################################
-# header =======================================================
+# header ----
 header <- 
   dashboardHeader( title = HTML("RNAvis"),
                    disable = F,
@@ -22,7 +19,7 @@ header <-
                                        icon = icon('comment'))
                    ) #/ dashboardheader
 
-# sidebar =======================================================
+# sidebar ----
 sidebar <-
   dashboardSidebar(
     hr(),
@@ -40,17 +37,21 @@ sidebar <-
   ) #/ dashboardsidebar
 
 
-# body =======================================================
+# body ----
 body <-
   dashboardBody(
   tags$head(includeCSS("www/custom.css")),
-  # Sidebar Tab Main dashboard -----
+  
   tabItems(
-    # sidebar Tab: run selector
+    # sidebar Tab: run selector ----
     tabItem(tabName = "runTab",
             # Inputs box ---
             box(width = 12, status = "primary", solidHeader = TRUE, title="chose a FLEPseq run",
-                selectizeInput("runSelection", inputId = 'runSelection', label=NULL, choices = c("Choose a run" = "", flep_runs), multiple = FALSE),
+                selectizeInput("runSelection", inputId = 'runSelection', label=NULL, choices = c("Choose a run" = "", flep_runs), multiple = FALSE)%>% 
+                  helper(icon = "question",
+                         colour = "grey",
+                         type = "markdown",
+                         content = "runSelection"),
                 fluidRow(column(dataTableOutput("sample_table"), width=11)),
                 fluidRow(column(textOutput("dirname"),width=11)),
                 fluidRow(column(textOutput("genotypes"),width=11))
@@ -60,7 +61,11 @@ body <-
                 fluidRow(column(splitLayout(plotOutput("coverage"),
                                             plotOutput("mapq"), cellWidths = c("50%", "50%"))
                                 ,width=11))
-                ) #/ box
+                ), #/ box
+            box(width = 12, status = "primary", solidHeader = TRUE, title="Bulk & Intergenic Poly(A) Distribution", collapsible = T, collapsed=T,
+                fluidRow(column(imageOutput("bulk_ig_global"), width=11))
+                
+            ) #/ box
 
     ), # /tabitem dashboard
     
@@ -71,9 +76,13 @@ body <-
                 solidHeader = TRUE, 
                 title="Select your Transcript of interest",
                 column(width=12,
-                       selectizeInput("transcript_sel", inputId = 'transcript_sel', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE))),
+                       selectizeInput("transcript_sel", inputId = 'transcript_sel', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE)))%>% 
+                  helper(icon = "question",
+                         colour = "grey",
+                         type = "markdown",
+                         content = "transcript_sel"),
                 column(width=3,
-                       actionButton(inputId = "Submittranscript", label = "Get Data")),
+                       actionButton(inputId = "Submittranscript", label = "Get/Update Data")),
             ), # /box
             tabsetPanel(
               tabPanel(h5("Transcript Overview"),
@@ -82,16 +91,21 @@ body <-
                        ), # /tabpanel
               tabPanel(h5("Intronic Profiles"),
                        fluidRow(box(width=12, status="primary", solidHeader = T, title="Intronic profile selection", collapsible=T, collapsed=F,
-                                    uiOutput("checkbox_introns")
+                                    uiOutput("intron_profile_sel")
                                     ) # /box
                        ),
-                       em("You can zoom in on the plot by first selecting an area of the plot and then by double-clicking on it."),
+                       
                        plotOutput("plot_reads", width = "100%",
                                   dblclick = "plot_reads_dblclick",
                                   brush = brushOpts(
                                     id = "plot_reads_brush",
-                                    resetOnNew = TRUE)
-                                  )
+                                    resetOnNew = TRUE))%>% 
+                         helper(icon = "question",
+                                colour = "grey",
+                                type = "markdown",
+                                content = "plot_reads"),
+                       em("You can zoom in on the plot by first selecting an area of the plot and then by double-clicking on it."),
+                       em("Double-clicking on the plot with no selection resets the plot to original scale.")
                        
                        
                        ), # /tabpanel
@@ -104,12 +118,24 @@ body <-
                        dataTableOutput("FlepTable_single")
 
                        ), # /tabPanel
-              tabPanel(h5("PolyA Distribution"),
-                       plotOutput("polyaDistr_single",
+              tabPanel(h5("Tailing"),
+                       box(width=12, 
+                           plotOutput("polyaDistr_single",
                                   dblclick = "polyaDistr_single_dblclick",
                                   brush = brushOpts(
                                     id = "polyaDistr_single_brush",
-                                    resetOnNew = TRUE))
+                                    resetOnNew = TRUE)),
+                           radioGroupButtons(
+                             inputId = "polyaHist_or_polyaDistr_single",
+                             label = "plot Type:",
+                             choices = c(
+                               `<i class='fa fa-area-chart'></i>` = "density",
+                               `<i class='fa fa-bar-chart'></i>` = "bar"),
+                               justified = TRUE,
+                             selected = "density"),
+                           em("You can zoom in on the plot by first selecting an area of the plot and then by double-clicking on it."),
+                           em("Double-clicking on the plot with no selection resets the plot to original scale.")
+                           ) #/ box
                        ) # /tabpanel
               ) # / tabsetpanel
 
@@ -122,9 +148,13 @@ body <-
                 solidHeader = TRUE, 
                 title="Select your transcripts of interest",
                 column(width=12,
-                       selectizeInput("transcripts_sel", inputId = 'transcripts_sel', label = NULL, choices = NULL, selected = NULL, multiple = TRUE, options = list(create = FALSE))),
+                       selectizeInput("transcripts_sel", inputId = 'transcripts_sel', label = NULL, choices = NULL, selected = NULL, multiple = TRUE, options = list(create = FALSE))) %>%
+                  helper(icon = "question",
+                         colour = "grey",
+                         type = "markdown",
+                         content = "transcripts_sel"),
                 column(width=3,
-                       actionButton(inputId = "Submittranscripts", label = "Get Data")),
+                       actionButton(inputId = "Submittranscripts", label = "Get/Update Data")),
             ), # /box
             tabsetPanel(
               tabPanel(h5("Transcripts Overview"),
@@ -137,14 +167,29 @@ body <-
                            actionButton(inputId = "getFlepTable_list",label = "Get FLEPseq2 table"),
                            downloadButton("download_FlepTable_list", "Download")
                            ),
-                       dataTableOutput("FlepTable_list"),
+                       dataTableOutput("FlepTable_list")
               ), # / tabpanel
-              tabPanel(h5("PolyA Distribution"),
-                       plotOutput("polyaDistr_list",
-                                  dblclick = "polyaDistr_list_dblclick",
-                                  brush = brushOpts(
-                                    id = "polyaDistr_list_brush",
-                                    resetOnNew = TRUE))
+              tabPanel(h5("Tailing"),
+                       box(width=12,
+                         plotOutput(
+                           "polyaDistr_list",
+                           dblclick = "polyaDistr_list_dblclick",
+                           brush = brushOpts(id = "polyaDistr_list_brush",
+                                             resetOnNew = TRUE)
+                         ),
+                         radioGroupButtons(
+                           inputId = "polyaHist_or_polyaDistr_list",
+                           label = "Visualize:",
+                           choices = c(
+                             `<i class='fa fa-area-chart'></i>` = "density",
+                             `<i class='fa fa-bar-chart'></i>` = "bar"
+                           ),
+                           justified = TRUE,
+                           selected = "density"
+                         ),
+                         em("You can zoom in on the plot by first selecting an area of the plot and then by double-clicking on it."),
+                         em("Double-clicking on the plot with no selection resets the plot to original scale.")
+                       ) #/ box
               ) # /tabpanel
             )
     
@@ -175,7 +220,7 @@ server <- function(input, output, session) {
   })
   
   global <- reactiveValues(datapath = getwd())
-  
+  observe_helpers(withMathJax = TRUE, help_dir = DOC_DIR)
   ### REACTIVE DATA ------------------------------------------------------------
   
   # Single zoomable plot
@@ -356,6 +401,9 @@ server <- function(input, output, session) {
                  if (!input$runSelection == "") {
 
                    global$datapath <- input$runSelection
+                   global$bulk_polyA_global_f <- file.path(global$datapath, paste0(basename(global$datapath), polya_bulk_plot_ext))
+                   global$ig_polyA_global_f <- file.path(global$datapath, paste0(basename(global$datapath), polya_ig_plot_ext))
+                   global$bulk_ig_global_f <- file.path(global$datapath, paste0(basename(global$datapath), bulk_ig_plot_ext))
                    tail_files <- list.files(path=file.path(global$datapath,tail_dir), pattern = paste0(tail_ext, "$"),full.names = T)
                    
                    sample_file <- list.files(path=global$datapath, pattern=sample_table, full.names = T)
@@ -393,7 +441,7 @@ server <- function(input, output, session) {
   ### OUTPUTS ---------------------------------------------------------------
 
   ## intronic profile selection (radiobuttons) ----
-  output$checkbox_introns <- renderUI(radioButtons('retention_introns', 'Select Retention intron', choices =unique(transcript_data()$transcript_DF$retention_introns), inline = T))
+  output$intron_profile_sel <- renderUI(selectizeInput('retention_introns', 'Select Retention intron', choices =unique(transcript_data()$transcript_DF$retention_introns)))
 
   
   output$sample_table = DT::renderDataTable({
@@ -442,12 +490,14 @@ server <- function(input, output, session) {
   
   ## GTF table ----
   output$GTFtable_single <- renderDataTable(
-    req(transcript_data()$GTF_DF ),
+    req(transcript_data()$GTF_DF %>%
+          relocate(transcript)),
     options = list(pageLength = 50)
   )
   
   output$GTFtable_list <- renderDataTable(
-    req(transcripts_data()$GTF_DF ),
+    req(transcripts_data()$GTF_DF %>%
+          relocate(transcript)),
     options = list(pageLength = 50)
   )
   
@@ -459,7 +509,7 @@ server <- function(input, output, session) {
       summarise(mean_cov=mean(coverage),
                 mean_mapq =mean(meanmapq))
     ggplot(cov, aes(x=rname, y=mean_cov, fill=origin)) +
-      geom_col(position = "dodge") +
+      geom_col(position = "dodge", alpha=0.5, color="black") +
       ggtitle("Mean coverage") +
       ggcustom_theme +
       theme(
@@ -479,7 +529,7 @@ server <- function(input, output, session) {
       summarise(mean_cov=mean(coverage),
                 mean_mapq =mean(meanmapq))
     ggplot(cov, aes(x=rname, y=mean_mapq, fill=origin)) +
-      geom_col(position = "dodge") +
+      geom_col(position = "dodge", alpha=0.5, color="black") +
       ggtitle("Mean mapping quality")+
       ggcustom_theme +
       theme(legend.position = "none")
@@ -488,16 +538,17 @@ server <- function(input, output, session) {
   ## polyA bulk distribution for single transcript ----
   output$polyaDistr_single <- renderPlot({
     req(transcript_data())
-    polya_bulk <- plot_polya_bulk(transcript_data()$transcript_DF)
+    polya_bulk <- plot_polya_bulk(transcript_data()$transcript_DF, input$polyaHist_or_polyaDistr_single)
     polya_bulk+
       coord_cartesian(xlim = ranges$x_polyaDistr_single, ylim = ranges$y_polyaDistr_single, expand = FALSE)
-      
+    
+
   })
   
   ## polyA bulk distribution for multiple transcripts ----
   output$polyaDistr_list <- renderPlot({
     req(transcripts_data())
-    polya_bulk <- plot_polya_bulk(transcripts_data()$transcripts_DF)
+    polya_bulk <- plot_polya_bulk(transcripts_data()$transcripts_DF, input$polyaHist_or_polyaDistr_list)
     polya_bulk+
       coord_cartesian(xlim = ranges$x_polyaDistr_list, ylim = ranges$y_polyaDistr_list, expand = FALSE)
     
@@ -531,6 +582,20 @@ server <- function(input, output, session) {
 
   })
   
+  output$bulk_polyA_global <- renderImage({
+    # Return a list containing the filename
+    list(src = global$bulk_polyA_global_f)
+    }, deleteFile = FALSE)
+  
+  output$ig_polyA_global <- renderImage({
+    list(src=global$ig_polyA_global_f)
+  }, deleteFile = FALSE)
+  
+  output$bulk_ig_global <- renderImage({
+    list(src=global$bulk_ig_global_f)
+  }, deleteFile = FALSE)
+
+  
   
   ## plot reads (intronic profile) ----
   output$plot_reads <- renderPlot({
@@ -555,17 +620,20 @@ server <- function(input, output, session) {
       geom_rect(data = total_data$df_coords_subgene,
                         aes(xmin = start, xmax = end, ymin = 0, ymax= 0.5 , fill = feature)) +
        
-      facet_wrap(~origin, ncol = 1) +
+      facet_wrap(~origin, ncol = 1, scales="free_y") +
       theme(strip.background =element_rect(fill="darkgrey"))+
       theme(strip.text = element_text(colour = 'white')) +
       theme(legend.position="bottom") +
       theme(legend.background = element_rect(linewidth=0.5, linetype="solid")) +
       ggtitle(total_data$gene_name) +
-      coord_cartesian(xlim = ranges$x_plot_reads, ylim = ranges$y_plot_reads, expand = FALSE)
+      coord_cartesian(xlim = ranges$x_plot_reads, ylim = ranges$y_plot_reads, expand = FALSE) +
+      theme(strip.text = element_text(
+        size = 20, color = "black"))
     
   }, height = 1500)
   
-
+  # When a double-click happens, check if there's a brush on the plot.
+  # If so, zoom to the brush bounds; if not, reset the zoom.
   observeEvent(input$polyaDistr_list_dblclick, {
     polyaDistr_list_brush <- input$polyaDistr_list_brush
     if (!is.null(polyaDistr_list_brush)) {
@@ -592,6 +660,8 @@ server <- function(input, output, session) {
     }
   })
   
+  # When a double-click happens, check if there's a brush on the plot.
+  # If so, zoom to the brush bounds; if not, reset the zoom.
   observeEvent(input$polyaDistr_single_dblclick, {
     polyaDistr_single_brush <- input$polyaDistr_single_brush
     if (!is.null(polyaDistr_single_brush)) {

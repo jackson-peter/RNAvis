@@ -9,7 +9,8 @@ HTSLIB_PATH = "/shared/biotools/htslib/1.18/bin/"
 README="/shared/home/jpeter/Scripts/RNAvis/README.md"
 
 datasets_path <- "/shared/home/jpeter/ShinyApps/RNAvis/data/FLEPseq_runs_new/"
-#datasets_path <- "/shared/home/jpeter/ShinyApps/RNAvis/data/FLEPseq_runs/"
+DOC_DIR <- file.path("www","doc_markdowns")
+
 runs_infos <- read.table("/shared/home/jpeter/ShinyApps/RNAvis/data/Runs_infos.tsv", col.names =c("Run_name", "Run_infos"), sep = '\t', fill=T) 
 
 flep_runs_df <- get_flepruns(datasets_path)
@@ -20,10 +21,19 @@ gtf_colnames <- c("seqnames", "source", "feature", "start", "end", "score", "str
 
 mapping_dir="2_Mapping"
 tail_dir="4_Tail"
+
+
 tail_ext=".read_info.result.merged.parts.csv"
+polya_bulk_plot_ext="_polyA_bulk.png"
+polya_ig_plot_ext="_polyA_ig.png"
+bulk_ig_plot_ext="_polyA_bulk_ig.png"
+
 mapping_ext=".bam.cov.txt"
 mapping_cols=c("rname","startpos","endpos", "numreads", "covbases", "coverage", "meandepth","meanbaseq","meanmapq")
+
 sample_table="barcode_correspondance.*$"
+
+
 
 index_ext=".sorted.csv.gz"
 tabix_l_ext=".list.tsv"

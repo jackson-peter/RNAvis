@@ -7,6 +7,9 @@ library(data.table)
 library(shinyFiles)
 library(shinybusy)
 library(shinyalert)
+library(shinyscreenshot)
+library(shinyhelper)
+library(shinyWidgets)
 library(pbapply)
 library(cowplot)
 library(gggenes)
@@ -15,7 +18,10 @@ library(shinyBS)
 library(DT)
 library(ggsci)
 library(markdown)
-library(shinyscreenshot)
+library(cowplot)
+library(rcartocolor)
+
+
 
 get_flepruns <- function(datasets_path) {
   flep_runs <- list.dirs(datasets_path, recursive = F, full.names = T)
@@ -59,8 +65,7 @@ sort_and_tabix <- function(tail_f) {
 
 # Check if tabixed and tabix if not
 check_if_tabixed <- function(tabix_file,tail_file, index=".tbi") {
-  print("###")
-  print(tail_file)
+
   if (!file.exists(tail_file)) {
     shinyalert("OUCH", paste("THERE IS NO", tail_file), type = "error")
   }
@@ -82,7 +87,6 @@ read_tabixed_files_single_region <- function(file, transcript) {
 
 # Read only part of files containing users' transcript 
 read_tabixed_files_multiple_regions <- function(file, transcripts) {
-  print(transcripts)
   transcripts_string <- paste(unique(unlist(strsplit(transcripts, "\n"))), collapse = " ")
 
   dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, transcripts_string, "-h"), header = F)
@@ -249,11 +253,30 @@ build_intronic_profile_for_plot <- function(filteredintron) {
   
 } 
 
+plot_polya_bulk <- function(dataset, plot_type) {
+  dataset <- dataset%>%
+    group_by(origin) %>%
+    mutate(label=paste0("n = ", n()),
+           origin=paste0(origin, " (", label, ")"))
+  
+  if (plot_type =="density") {
+    polya_bulk <- ggplot(dataset, aes(x=polya_length, fill=origin)) +
+      geom_density(alpha=0.5, color="black")+
+      ggcustom_theme +
+      theme(legend.position="bottom") +
+      theme(legend.background = element_rect(linewidth=0.5, linetype="solid"))
+    
+  } else {
+    polya_bulk <- ggplot(dataset, aes(x=polya_length, fill=origin, color=origin)) +
+      geom_bar()+
+      facet_wrap(~origin) + 
+      ggcustom_theme +
+      theme(legend.position="bottom") +
+      theme(legend.background = element_rect(linewidth=0.5, linetype="solid")) 
+  }
+  
+  polya_bulk <- polya_bulk + ggtitle("Poly(A) length distribution")
 
-plot_polya_bulk <- function(dataset) {
-  polya_bulk <- ggplot(dataset, aes(x=polya_length, color=origin, fill=origin)) +
-    geom_density(alpha=0.5)+
-    ggcustom_theme 
   return(polya_bulk)
 }
 
@@ -261,8 +284,8 @@ plot_polya_bulk <- function(dataset) {
 
 ggcustom_theme <- list(
   theme_bw(),
-  scale_color_jco(),
-  scale_fill_jco()
+  scale_color_carto_d(),
+  scale_fill_carto_d()
 )
 
 dropdownMenuCustom <-     function (..., type = c("messages", "notifications", "tasks"), 

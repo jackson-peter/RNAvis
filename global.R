@@ -23,10 +23,11 @@ mapping_dir="2_Mapping"
 tail_dir="4_Tail"
 
 
-tail_ext=".read_info.result.merged.parts.csv"
+tail_ext=".sorted.csv.gz"
 polya_bulk_plot_ext="_polyA_bulk.png"
 polya_ig_plot_ext="_polyA_ig.png"
 bulk_ig_plot_ext="_polyA_bulk_ig.png"
+cumul_polyA_plot_ext="_polyA_cumul.png"
 
 mapping_ext=".bam.cov.txt"
 mapping_cols=c("rname","startpos","endpos", "numreads", "covbases", "coverage", "meandepth","meanbaseq","meanmapq")

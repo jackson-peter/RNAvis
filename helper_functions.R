@@ -12,7 +12,6 @@ library(shinyhelper)
 library(shinyWidgets)
 library(pbapply)
 library(cowplot)
-library(gggenes)
 library(GenomicRanges)
 library(shinyBS)
 library(DT)
@@ -44,6 +43,7 @@ shinyInput <- function(FUN,id,num,...) {
   }
   inputs
 }
+
 
 # Sort file and tabix
 sort_and_tabix <- function(tail_f) {
@@ -333,3 +333,6 @@ dropdownMenuCustom <-     function (..., type = c("messages", "notifications", "
 customSentence <- function(numItems, type) {
   paste("Feedback & suggestions")
 }
+
+
+

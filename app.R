@@ -621,9 +621,10 @@ server <- function(input, output, session) {
       coord_fixed() +
       theme(axis.text.y=element_blank(), 
             axis.ticks.y=element_blank(),
-            legend.position="bottom") +
+            legend.position="bottom",
+            panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
       xlab(chromo) + ylab("") +
-      ggtitle(paste(gene, "(strand:", strand, ")"))
+      ggtitle(paste(gene, "(strand:", strand, ")")) 
     
   })
 

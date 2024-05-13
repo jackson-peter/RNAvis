@@ -6,11 +6,10 @@ theme_set(theme_bw())
 # UI ###########################################################
 # header ----
 header <- 
-  dashboardHeader( title = HTML("RNAvis"),
+  dashboardHeader(title = HTML("RNAvis"),
                    disable = F,
                    dropdownMenuCustom( type = 'message',
                                        customSentence = "feedback & suggestions",
-                                       # feedback notif
                                        messageItem(
                                          from = "jackson.peter",#'Feedback and suggestions',
                                          message =  "",#paste0("jackson.peter@ibmp-cnrs.unistra.fr" ),
@@ -28,9 +27,7 @@ sidebar <-
                 menuItem("Transcript-Specific", tabName = "transcriptSpecificTab", icon=icon("minus")),
                 menuItem("Transcripts List", tabName = "transcriptsListTab", icon=icon("list-ul")),
                 menuItem("README", tabName = "readme", icon=icon("mortar-board"))
-                
-                #menuItem("About", tabName = "about", icon = icon("question"))
-                
+
     ), #/ sidebarmenu
     hr(),
     screenshotButton()
@@ -46,11 +43,9 @@ body <-
     # sidebar Tab: run selector ----
     tabItem(tabName = "runTab",
             # Inputs box ---
-            box(width = 12, status = "primary", solidHeader = TRUE, title="chose a FLEPseq run",
-                #selectizeInput(inputId = 'runSelection', label=NULL, choices = c("Choose a run" = "", flep_runs), multiple = FALSE)%>% 
+            box(width = 12, status = "primary", solidHeader = T, title="chose a FLEPseq run",
                 fluidRow(column(selectizeInput("runSelection", inputId = 'runSelection', label=NULL, choices = c("Choose a run" = "", flep_runs), multiple = FALSE), width=9 ),
-                         actionButton("SubmitRunSel", "Get the data!"), width=3),
-                fluidRow(column(dataTableOutput("sample_table"), width=12))
+                         actionButton("SubmitRunSel", "Get the data!"), width=3)
                 )%>% 
               helper(icon = "question",
                      colour = "grey",
@@ -59,7 +54,10 @@ body <-
             # /box
             # plots about run
             tabsetPanel(id = "run_tabsetPanel",
-              tabPanel(value = "dl_tabPanel", h5("Download Complete Data"),
+              tabPanel(value = "dl_tabPanel", h5("Download Sample Data"),
+                       fluidRow(column(dataTableOutput("sample_table"), width=12)),
+                       hr(),
+                       em("Full dataset per sample is available for download."),
                        selectizeInput("download_sample_sel", inputId = 'download_sample_sel', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE)),
                        downloadButton("download_sample_data", "Download")
                        ),
@@ -69,7 +67,7 @@ body <-
                                 ,width=11
                        ),
               tabPanel(h5("Bulk & Intergenic Poly(A) Distribution"),
-                       imageOutput("bulk_ig_global"),
+                       fluidRow(column(imageOutput("bulk_ig_global"), width=12))
                        ),
               tabPanel(h5("cumulative Poly(A) Distribution"),
                        imageOutput("cumul_polyA_global")
@@ -85,16 +83,16 @@ body <-
                 status = "primary", 
                 solidHeader = TRUE, 
                 title="Select your Transcript of interest",
-                column(width=12,
-                       selectizeInput("transcript_sel", inputId = 'transcript_sel', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE)))%>% 
-                  helper(icon = "question",
-                         colour = "grey",
-                         type = "markdown",
-                         content = "transcript_sel"),
+                column(width=9,
+                       selectizeInput("transcript_sel", inputId = 'transcript_sel', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE))),
                 column(width=3,
                        actionButton(inputId = "Submittranscript", label = "Get/Update Data")),
-            ), # /box
-            tabsetPanel(
+            )%>% 
+              helper(icon = "question",
+                     colour = "grey",
+                     type = "markdown",
+                     content = "transcript_sel"), 
+            tabsetPanel(id="transctipt_tabsetpanel",
               tabPanel(h5("Transcript Overview"),
                        plotOutput("plot_gene"),
                        dataTableOutput("GTFtable_single")
@@ -158,16 +156,16 @@ body <-
                 status = "primary", 
                 solidHeader = TRUE, 
                 title="Select your transcripts of interest",
-                column(width=12,
-                       selectizeInput("transcripts_sel", inputId = 'transcripts_sel', label = NULL, choices = NULL, selected = NULL, multiple = TRUE, options = list(create = FALSE))) %>%
-                  helper(icon = "question",
-                         colour = "grey",
-                         type = "markdown",
-                         content = "transcripts_sel"),
+                column(width=9,
+                       selectizeInput("transcripts_sel", inputId = 'transcripts_sel', label = NULL, choices = NULL, selected = NULL, multiple = TRUE, options = list(create = FALSE))),
                 column(width=3,
                        actionButton(inputId = "Submittranscripts", label = "Get/Update Data")),
-            ), # /box
-            tabsetPanel(
+            )%>%
+              helper(icon = "question",
+                     colour = "grey",
+                     type = "markdown",
+                     content = "transcripts_sel"),
+            tabsetPanel(id="transcripts_tabsetpanel",
               tabPanel(h5("Transcripts Overview"),
                        dataTableOutput("GTFtable_list")
               ), # /tabpanel
@@ -206,7 +204,7 @@ body <-
     
     ), #/ tabitem transcriptlistTab
     tabItem(tabName="readme",
-            tabsetPanel(
+            tabsetPanel(id="readme_tabsetpanel",
               fluidRow(includeMarkdown(README))
               )
             )
@@ -239,33 +237,14 @@ server <- function(input, output, session) {
   
   ## Mapping data (coverage etc...)
   MAP_data <- eventReactive(input$SubmitRunSel,{
-    print(global$sample_corr$genotype)
     map_files <- global$sample_corr$map_file
-    print("map")
-    print(map_files)
-    print("----------")
     names(map_files) <- global$sample_corr$genotype
-    print(map_files)
     mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "origin") 
-    #%>% filter(origin %in% genoSelect())
-    print(unique(mapping_q$origin))
-    print("here?")
+    
     return(mapping_q)
   })
   
-  # ## Selected Genotypes
-  # genoSelect <- reactive({
-  #   rows=names(input)[grepl(pattern = "srows_",names(input))]
-  #   paste(unlist(lapply(rows,function(i){
-  #     if(input[[i]]==T){
-  #       index=as.numeric(substr(i,gregexpr(pattern = "_",i)[[1]]+1,nchar(i)))
-  #       
-  #       return(global$sample_corr$genotype[index])
-  #     }
-  #   })))
-  #   
-  # })
-  # 
+
   ## Dataset for list of transcripts
   transcripts_data <- eventReactive(input$Submittranscripts, {
     req(input$runSelection, input$transcripts_sel)
@@ -455,27 +434,31 @@ server <- function(input, output, session) {
   ### OUTPUTS ---------------------------------------------------------------
 
   ## intronic profile selection (radiobuttons) ----
-  output$intron_profile_sel <- renderUI(selectizeInput('retention_introns', 'Select Retention intron', choices =unique(transcript_data()$transcript_DF$retention_introns)))
-
+  output$intron_profile_sel <- renderUI({
+    req(transcript_data())
+    tryCatch( { 
+      selectizeInput('retention_introns', 'Select Retention intron', choices =unique(transcript_data()$transcript_DF$retention_introns), selected="none")
+    
+    }, error=function(e) {
+      selectizeInput('retention_introns', 'Select Retention intron', choices =unique(transcript_data()$transcript_DF$retention_introns))
+    })
+  })
   
   output$sample_table2 = DT::renderDataTable({
     req(global$sample_corr$genotype)
-
-    DT::datatable(cbind(Pick=shinyInput(checkboxInput,"srows_",length(global$sample_corr$genotype),value=TRUE,width=1), global$sample_corr),
-                  options = list(orderClasses = TRUE,
-                                 lengthMenu = c(5, 25, 50),
-                                 pageLength = 25 ,
-                                 drawCallback= JS(
-                                   'function(settings) {
-                                     Shiny.bindAll(this.api().table().node());}')
-                  ),selection='none',escape=F)
-
+    
+    DT::datatable(global$sample_corr)
+    
   })
   
   output$sample_table = DT::renderDataTable({
     req(global$sample_corr$genotype)
+    out_table <- global$sample_corr %>%
+      mutate(tabix_file= basename(tabix_file),
+             map_file=basename(map_file),
+             gene_list=basename(gene_list))
     
-    DT::datatable(global$sample_corr)
+    DT::datatable(out_table)
     
   })
   
@@ -520,8 +503,6 @@ server <- function(input, output, session) {
     }
   )
   
-  
-  
   ## GTF table ----
   output$GTFtable_single <- renderDataTable(
     req(transcript_data()$GTF_DF %>%
@@ -553,7 +534,9 @@ server <- function(input, output, session) {
         legend.box.just = "left",
         legend.margin = margin(6, 6, 6, 6),
         legend.background = element_rect(fill="white", linewidth=0.5, linetype="solid", colour ="black")
-      )
+      ) +
+      xlab("Chromosome") +
+      ylab("Mean Coverage")
   })
   
   ## mapping quality plot ----
@@ -565,9 +548,11 @@ server <- function(input, output, session) {
                 mean_mapq =mean(meanmapq))
     ggplot(cov, aes(x=rname, y=mean_mapq, fill=origin)) +
       geom_col(position = "dodge", alpha=0.5, color="black") +
-      ggtitle("Mean mapping quality")+
+      ggtitle("Mean Mapping Quality")+
       ggcustom_theme +
-      theme(legend.position = "none")
+      theme(legend.position = "none") +
+      xlab("Chromosome") +
+      ylab("Mean Mapping Quality")
   })
   
   ## polyA bulk distribution for single transcript ----
@@ -617,31 +602,36 @@ server <- function(input, output, session) {
     
     ggplot(GTF_DF) +
       geom_rect(aes(xmin=start, xmax=end, ymin=0, ymax=y_max, fill=feature)) +
-      geom_text(aes(x=start+(end-start)/2, y=0+y_max/2, label=feat_id2), size=3) +
+      geom_text(aes(x=start+(end-start)/2, y=0+y_max/2, label=feat_id2), size=3, color="white") +
       coord_fixed() +
+      ggcustom_theme +
       theme(axis.text.y=element_blank(), 
             axis.ticks.y=element_blank(),
             legend.position="bottom",
             panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
       xlab(chromo) + ylab("") +
-      ggtitle(paste(gene, "(strand:", strand, ")")) 
+      ggtitle(paste(gene, "(", strand, "strand)")) 
     
   })
 
   output$bulk_polyA_global <- renderImage({
+    req(input$SubmitRunSel)
     # Return a list containing the filename
     list(src = global$bulk_polyA_global_f)
     }, deleteFile = FALSE)
   
   output$ig_polyA_global <- renderImage({
+    req(input$SubmitRunSel)
     list(src=global$ig_polyA_global_f)
   }, deleteFile = FALSE)
   
   output$bulk_ig_global <- renderImage({
-    list(src=global$bulk_ig_global_f)
+    req(input$SubmitRunSel)
+    list(src=global$bulk_ig_global_f, width = "100%", height = "700")
   }, deleteFile = FALSE)
   
   output$cumul_polyA_global <- renderImage({
+    req(input$SubmitRunSel)
     # Return a list containing the filename
     list(src = global$cumul_polyA_global_f)
   }, deleteFile = FALSE)
@@ -650,7 +640,7 @@ server <- function(input, output, session) {
   
   ## plot reads (intronic profile) ----
   output$plot_reads <- renderPlot({
-    req(filteredintron())
+    req(transcript_data())
     
     validate(need(!is.null(input$retention_introns), "Please select an intron profile"))
     total_data <- build_intronic_profile_for_plot(filteredintron())

@@ -28,16 +28,16 @@ polya_bulk_plot_ext="_polyA_bulk.png"
 polya_ig_plot_ext="_polyA_ig.png"
 bulk_ig_plot_ext="_polyA_bulk_ig.png"
 cumul_polyA_plot_ext="_polyA_cumul.png"
-
 mapping_ext=".bam.cov.txt"
 mapping_cols=c("rname","startpos","endpos", "numreads", "covbases", "coverage", "meandepth","meanbaseq","meanmapq")
+index_ext=".sorted.csv.gz"
+tabix_l_ext=".list.tsv"
 
 sample_table="barcode_correspondance.*$"
 
 
 
-index_ext=".sorted.csv.gz"
-tabix_l_ext=".list.tsv"
+
 
 transcript_col=4
 start_col=6

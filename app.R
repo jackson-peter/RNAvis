@@ -627,7 +627,8 @@ server <- function(input, output, session) {
   
   output$bulk_ig_global <- renderImage({
     req(input$SubmitRunSel)
-    list(src=global$bulk_ig_global_f, width = "100%", height = "700")
+    #list(src=global$bulk_ig_global_f, width = "100%", height = "700")
+    list(src=global$bulk_ig_global_f)
   }, deleteFile = FALSE)
   
   output$cumul_polyA_global <- renderImage({

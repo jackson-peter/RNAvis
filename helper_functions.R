@@ -61,10 +61,12 @@ read_tabixed_files_multiple_regions <- function(file, transcripts) {
 
 # Read GTF file for specified transcript
 read_GTF_file <- function(gtf, transcript) {
+  
 
   #dt <- fread(cmd = paste("grep", transcript, gtf, "| grep -P 'mRNA|exon|five_prime_UTR|three_prime_UTR'"), col.names = gtf_colnames) %>%
   dt <- fread(cmd = paste("grep", transcript, gtf, "| grep -P 'mRNA|exon'"), col.names = gtf_colnames)
   
+  #print(transcript)
   if (nrow(dt)>0) {
     dt <- dt %>%
       mutate(transcript=transcript,
@@ -77,6 +79,8 @@ read_GTF_file <- function(gtf, transcript) {
     
     return(dt)
     
+  } else {
+    print("not in GFF")
   }
 
 

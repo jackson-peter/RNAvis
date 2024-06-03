@@ -289,10 +289,13 @@ server <- function(input, output, session) {
       list_transcripts <- input$transcripts_sel
       
     } else if (isTruthy(input$transcripts_upload)) {
+      print("list")
       list_transcripts <- check_transcripts_list(input$transcripts_upload, gene_list_data())
     }
-
+    
+    show_modal_spinner(spin = "fingerprint", text="fetching transcripts from list. This could take a while") # show the modal window
     GTF_DF <- rbindlist(lapply(list_transcripts, read_GTF_file, gtf=ref_gtf))
+    
     tabixed_list <- global$sample_corr$tabix_file
     names(tabixed_list) <- global$sample_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
@@ -306,6 +309,7 @@ server <- function(input, output, session) {
     shinyalert("Nice!", paste(nrow(transcripts_DF), "transcripts in table"), type = "success")
     transcripts_DATA <- list(transcripts_DF = transcripts_DF, GTF_DF = GTF_DF)
     
+    remove_modal_spinner() # remove modal spinner when done
     return(transcripts_DATA)
 
   })
@@ -314,6 +318,7 @@ server <- function(input, output, session) {
   transcript_data <- eventReactive(input$Submittranscript,{
     req(input$runSelection, input$transcript_sel)
     # GTF gymnastics to handle introns
+    show_modal_spinner(spin = "fingerprint", text="fetching transcripts from list\n this could take a while") # show the modal window
     gtf_infos <- read_GTF_file(ref_gtf, input$transcript_sel)
     mRNA_df <- gtf_infos %>% filter(feature=="mRNA")
     exon_df <- gtf_infos %>% filter(feature=="exon")
@@ -407,6 +412,7 @@ server <- function(input, output, session) {
 
 
     transcript_DATA <- list(transcript_DF = transcript_DF, GTF_DF = GTF_DF, COORDS_DF = coords_df)
+    remove_modal_spinner() # remove modal spinner when done
 
     return(transcript_DATA)
   })

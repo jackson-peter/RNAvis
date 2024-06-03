@@ -61,9 +61,11 @@ body <-
                        selectizeInput("download_sample_sel", inputId = 'download_sample_sel', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE)),
                        downloadButton("download_sample_data", "Download")
                        ),
-              tabPanel(h5("Run mapping & Coverage"),
-                       splitLayout(plotOutput("coverage"),
-                                   plotOutput("mapq"), cellWidths = c("50%", "50%"))
+              tabPanel(h5("Run mapping stats"),
+                       splitLayout(plotOutput("numreads"),
+                                   plotOutput("numgenes"),
+                                   #plotOutput("mapq"),
+                                   cellWidths = c("50%", "50%"))
                                 ,width=11
                        ),
               tabPanel(h5("Bulk & Intergenic Poly(A) Distribution"),
@@ -126,8 +128,9 @@ body <-
                        dataTableOutput("FlepTable_single")
 
                        ), # /tabPanel
-              tabPanel(h5("Tailing"),
+              tabPanel(h5("Poly(A) Tail"),
                        box(width=12, 
+                           
                            plotOutput("polyaDistr_single",
                                   dblclick = "polyaDistr_single_dblclick",
                                   brush = brushOpts(
@@ -143,9 +146,18 @@ body <-
                              selected = "density"),
                            em("You can zoom in on the plot by first selecting an area of the plot and then by double-clicking on it."),
                            em("Double-clicking on the plot with no selection resets the plot to original scale."),
-                           plotOutput("urid_single")
-                           ) #/ box
-                       ) # /tabpanel
+                           ), #/ box
+                       
+                       ), # /tabpanel
+              tabPanel(h5("Additional Tail"),
+                       box(width=12,
+                           sliderInput("urid_thresh_single", "Uridylation percentage threshold:", value = 60, min = 0, max = 100, width= "50%")%>%
+                             helper(icon = "question",
+                                    colour = "grey",
+                                    type = "markdown",
+                                    content = "urid_thresh"),
+                           plotOutput("urid_single"))
+                       )
               ) # / tabsetpanel
 
     ), #/ tabitem transcriptspecificTab
@@ -177,13 +189,13 @@ body <-
                            ),
                        dataTableOutput("FlepTable_list")
               ), # / tabpanel
-              tabPanel(h5("Tailing"),
+              tabPanel(h5("Poly(A) tail"),
                        box(width=12,
-                         plotOutput(
-                           "polyaDistr_list",
-                           dblclick = "polyaDistr_list_dblclick",
-                           brush = brushOpts(id = "polyaDistr_list_brush",
-                                             resetOnNew = TRUE)
+                           plotOutput(
+                             "polyaDistr_list",
+                             dblclick = "polyaDistr_list_dblclick",
+                             brush = brushOpts(id = "polyaDistr_list_brush",
+                                               resetOnNew = TRUE)
                          ),
                          radioGroupButtons(
                            inputId = "polyaHist_or_polyaDistr_list",
@@ -197,9 +209,22 @@ body <-
                          ),
                          em("You can zoom in on the plot by first selecting an area of the plot and then by double-clicking on it."),
                          em("Double-clicking on the plot with no selection resets the plot to original scale."),
-                         plotOutput("urid_list")
-                       ) #/ box
-              ) # /tabpanel
+                         
+                       ), #/ box
+                       
+              ), # /tabpanel
+              tabPanel(h5("Additional Tail"),
+                       box(width=12,
+                           sliderInput("urid_thresh_list", "Uridylation percentage threshold:", value = 60, min = 0, max = 100, width= "50%")%>%
+                             helper(icon = "question",
+                                    colour = "grey",
+                                    type = "markdown",
+                                    content = "urid_thresh"),
+                           plotOutput("urid_list")
+                       )
+              )
+                       
+              
             )
     
     ), #/ tabitem transcriptlistTab
@@ -242,6 +267,15 @@ server <- function(input, output, session) {
     mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "origin") 
     
     return(mapping_q)
+  })
+  
+  ## gene list data 
+  gene_list_data <- eventReactive(input$SubmitRunSel,{
+    gene_list_f <- global$sample_corr$gene_list
+    names(gene_list_f) <- global$sample_corr$genotype
+    gene_list <- rbindlist(lapply(gene_list_f, fread, col.names="AGI"), idcol = "origin") 
+    
+    return(gene_list)
   })
   
 
@@ -316,19 +350,37 @@ server <- function(input, output, session) {
     tryCatch(
       expr = {
         colnames(transcript_DF) <- column_names
+        print(column_names)
+        gff_strand=unique(GTF_DF$strand)
         transcript_DF <- transcript_DF %>%
-          group_by(origin) %>% 
+          separate(read_core_id, into=c("read_id", "chr", "read_start", "read_end"), sep = ',' , remove = F, convert = T)%>%
+          mutate(gff_strand=gff_strand) %>%
+          mutate(
+                 sort_val1 =case_when(
+                   gff_strand=='+'~ read_start,
+                   gff_strand=='-' ~ read_end),
+                 sort_val2 =case_when(
+                   gff_strand=='+' ~ read_end+(round(polya_length) + nchar(additional_tail)),
+                   gff_strand=='-' ~ read_start - (round(polya_length) + nchar(additional_tail)),
+                 ))%>%
+          arrange(origin, sort_val1, sort_val2) %>%
+          select(-c(sort_val1, sort_val2, gff_strand)) %>%
+          group_by(origin, retention_introns) %>% 
           mutate(sample_id = row_number()) %>% 
           ungroup() %>%
           mutate(Run=basename(global$datapath))%>%
           mutate(across(retention_introns, as.character))%>%
           mutate(retention_introns = replace_na(retention_introns, "none")) 
+        
+        setDT(transcript_DF)
+        
+
         #%>% filter(origin %in% genoSelect())
         
         n_introns <- unique(transcript_DF$mRNA_intron_num)
         if (n_introns>0) {
           intron_cols <- paste0("intron",1:n_introns)
-          setDT(transcript_DF)
+          
           transcript_DF <- transcript_DF[, paste(intron_cols) := lapply(paste(intron_cols), getIntronsRetained, retained_introns = as.character(retention_introns)), by = retention_introns]
           coords_df <- build_coords_df(transcript_DF, GTF_DF, intron_cols) 
         } else {
@@ -343,8 +395,9 @@ server <- function(input, output, session) {
      
     )
 
+
     transcript_DATA <- list(transcript_DF = transcript_DF, GTF_DF = GTF_DF, COORDS_DF = coords_df)
-    
+
     return(transcript_DATA)
   })
 
@@ -538,6 +591,53 @@ server <- function(input, output, session) {
       xlab("Chromosome") +
       ylab("Mean Coverage")
   })
+
+  ## nreads plot ----
+  output$numgenes <- renderPlot({
+    req(input$SubmitRunSel)
+    print(gene_list_data())
+
+    genes_by_sample <- gene_list_data() %>%
+      group_by(origin) %>%
+      dplyr::summarise(n_genes=n())
+    
+
+    ggplot(genes_by_sample, aes(x=origin, y=n_genes, fill=origin)) +
+      geom_col(position = "dodge", alpha=0.5, color="black") +
+        ggtitle("Number of genes by sample") +
+        ggcustom_theme +
+        theme(
+          legend.position = "none") +
+        xlab("sample") +
+        ylab("Number of genes")
+
+  })
+  
+  
+  ## nreads plot ----
+  output$numreads <- renderPlot({
+    req(input$SubmitRunSel)
+
+    cov <- MAP_data() %>%
+      group_by(origin, rname) %>%
+      summarise(mean_nreads=mean(numreads),
+                mean_mapq =mean(meanmapq))
+    ggplot(cov, aes(x=rname, y=mean_nreads, fill=origin)) +
+      geom_col(position = "dodge", alpha=0.5, color="black") +
+      ggtitle("Mean number of reads") +
+      ggcustom_theme +
+      theme(
+        legend.position = c(.05, .95),
+        legend.justification = c("left", "top"),
+        legend.box.just = "left",
+        legend.margin = margin(6, 6, 6, 6),
+        legend.background = element_rect(fill="white", linewidth=0.5, linetype="solid", colour ="black")
+      ) +
+      xlab("Chromosome") +
+      ylab("Mean number of reads")
+  })
+  
+  
   
   ## mapping quality plot ----
   output$mapq <- renderPlot({
@@ -565,9 +665,20 @@ server <- function(input, output, session) {
 
   })
   
+  ## # uridylated reads for one transcript ----
   output$urid_single <- renderPlot({
+    req(transcript_data())
+    urid <- plot_urid(transcript_data()$transcript_DF, input$urid_thresh_single)
+    urid
+    
+  })
+  
+  ## # uridylated reads for multiple transcript ----
+  output$urid_list <- renderPlot({
     req(transcripts_data())
-    ggplot() + theme_void()
+    urid <- plot_urid(transcripts_data()$transcripts_DF, input$urid_thresh_list)
+    urid
+    
   })
   
   ## polyA bulk distribution for multiple transcripts ----
@@ -578,12 +689,6 @@ server <- function(input, output, session) {
       coord_cartesian(xlim = ranges$x_polyaDistr_list, ylim = ranges$y_polyaDistr_list, expand = FALSE)
     
   })
-  
-  output$urid_list <- renderPlot({
-    req(transcripts_data())
-    ggplot() + theme_void()
-  })
-  
   
   ## gene plot ----
   output$plot_gene <- renderPlot({
@@ -649,26 +754,29 @@ server <- function(input, output, session) {
     # plot
     ggplot() +
       # transcripts.....
-      geom_rect(data=total_data$df_coords_transcript,
-                aes(xmin = start, xmax = end, ymin = sample_id, ymax=sample_id + 0.5 ), fill="grey",alpha=.8)+
-      # .... annotated
+      #geom_rect(data=total_data$df_coords_transcript,
+      #          aes(xmin = start, xmax = end, ymin = sample_id, ymax=sample_id + 0.5 ), fill="grey",alpha=.8)+
       geom_rect(data = total_data$df_coords_transcript_subgene_tail,
-                         aes(xmin = start, xmax = end, ymin = sample_id , ymax=sample_id +0.5,fill = feature), alpha=.8 ) +
+                aes(xmin = start, xmax = end, ymin = sample_id , ymax=sample_id +0.5,fill = feature), alpha=.8 ) +
+      geom_segment(data=total_data$df_coords_transcript, aes(x = start, y = sample_id+0.25, xend = end, yend = sample_id+0.25),color = "black") +
+      # .... annotated
+      
       
       # model gene ...
-      geom_rect(data=total_data$df_coords_gene, 
-                      aes(xmin = start, xmax = end, ymin = 0, ymax= 0.5), color = "black") +
-      # ... annotated
-      geom_rect(data = total_data$df_coords_subgene,
-                        aes(xmin = start, xmax = end, ymin = 0, ymax= 0.5 , fill = feature)) +
+      # geom_rect(data = total_data$df_coords_subgene,
+      #           aes(xmin = start, xmax = end, ymin = 0, ymax= 0.5 , fill = feature)) +
+      # geom_segment(data=total_data$df_coords_gene, 
+      #                 aes(x = start, xend = end, y = 0.25, yend= 0.25), color = "black") +
+      # # ... annotated
+      
        
-      facet_wrap(~origin, ncol = 1, scales="free_y") +
+      facet_wrap(~origin, ncol = 1) +
       theme(strip.background =element_rect(fill="darkgrey"))+
       theme(strip.text = element_text(colour = 'white')) +
       theme(legend.position="bottom") +
       theme(legend.background = element_rect(linewidth=0.5, linetype="solid")) +
       ggtitle(total_data$gene_name) +
-      coord_cartesian(xlim = ranges$x_plot_reads, ylim = ranges$y_plot_reads, expand = FALSE) +
+      coord_cartesian(xlim = ranges$x_plot_reads, ylim = ranges$y_plot_reads, expand = T) +
       theme(strip.text = element_text(
         size = 20, color = "black"))
     
@@ -691,6 +799,7 @@ server <- function(input, output, session) {
   # When a double-click happens, check if there's a brush on the plot.
   # If so, zoom to the brush bounds; if not, reset the zoom.
   observeEvent(input$plot_reads_dblclick, {
+    print("GOT IT")
     plot_reads_brush <- input$plot_reads_brush
     if (!is.null(plot_reads_brush)) {
       ranges$x_plot_reads <- c(plot_reads_brush$xmin, plot_reads_brush$xmax)
@@ -700,6 +809,9 @@ server <- function(input, output, session) {
       ranges$x_plot_reads <- NULL
       ranges$y_plot_reads <- NULL
     }
+    print(ranges$x_plot_reads)
+    print(ranges$y_plot_reads)
+    return(ranges)
   })
   
   # When a double-click happens, check if there's a brush on the plot.

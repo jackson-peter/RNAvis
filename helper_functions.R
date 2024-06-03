@@ -1,3 +1,5 @@
+# unload all libraries
+#lapply(paste('package:',names(sessionInfo()$otherPkgs),sep=""),detach,character.only=TRUE,unload=TRUE)
 
 # load all libraries
 library(shiny)
@@ -80,7 +82,6 @@ getIntronsRetained <- function(intron_name, retained_introns){
 build_coords_df <- function(transcript_df, GTF_DF, intron_cols) {
   transcript_df_coords <- transcript_df  %>%
     left_join(GTF_DF, by = c("mRNA"="transcript"), relationship = "many-to-many") %>%
-    separate(read_core_id, into=c("read_id", "chr", "read_start", "read_end"), sep = ',' , remove = F, convert = T) %>%
     mutate(addtail_nchar =nchar(additional_tail))
   transcript_df_coords$orientation=unique(GTF_DF$orientation)
   transcripts_df <- transcript_df_coords %>%
@@ -157,24 +158,23 @@ build_coords_df <- function(transcript_df, GTF_DF, intron_cols) {
                          orientation==0 & is.na(additional_tail) ~ read_start - round(polya_length)))
 
   
-  transcript_df_coords <-  bind_rows(transcript_df_coords, polya_df, addtail_df)%>%
-    arrange(read_core_id, start, end)
-
+  transcript_df_coords <-  bind_rows(transcript_df_coords, polya_df, addtail_df) 
   
+
   return(transcript_df_coords)
   
 }
 
 
 build_intronic_profile_for_plot <- function(filteredintron) {
-  coords_df <- filteredintron
+  coords_df <- filteredintron 
   
   df_coords_gene <- coords_df %>% 
     filter(feat_type=="gene")
   genotypes <- unique(coords_df$origin)
   gene_name <- unique(df_coords_gene$mRNA)
   
-  # gene: this is to have the 'model' of the intron profile
+  # # gene: this is to have the 'model' of the intron profile
   df_coords_gene <- df_coords_gene[!duplicated(df_coords_gene$mRNA, by=c("retention_introns", "origin")),]
   df_coords_gene <- df_coords_gene[rep(seq_len(nrow(df_coords_gene)), each = length(genotypes)), ]
   df_coords_gene$origin=genotypes
@@ -195,9 +195,16 @@ build_intronic_profile_for_plot <- function(filteredintron) {
   
   
   # filter subgene to remove introns/exons that exist in annotation but not present in read (ie not sequenced)
-  df_coords_transcript_subgene <- df_coords_subgene %>%
-    filter(start>=read_start,
-           end<=read_end)
+  #df_coords_transcript_subgene <- df_coords_subgene
+  df_coords_transcript_subgene <- df_coords_subgene%>%
+    filter(end>=read_start,
+           start<=read_end) %>%
+    mutate(start=case_when((strand == '+' & start<read_start) ~ read_start,  # same instructions for each strand as when strand=='-', start is the smallest coord value but is biologically the end of the transcript
+                           (strand == '-' & start<read_start) ~ read_start, 
+                           TRUE ~start),
+           end = case_when((strand == '+' & end> read_end) ~read_end,
+                           (strand == '-' & end> read_end) ~read_end,
+                           TRUE ~end))
   
   # combining dataframes
   df_coords_transcript_subgene_tail <- rbind(df_coords_transcript_subgene, df_coords_tails)
@@ -213,6 +220,8 @@ build_intronic_profile_for_plot <- function(filteredintron) {
                                     df_coords_gene = df_coords_gene,
                                     df_coords_subgene=df_coords_subgene,
                                     gene_name=gene_name)
+  
+  #print(df_coords_gene)
   
   return(intronic_profile_for_plot)
   
@@ -243,6 +252,25 @@ plot_polya_bulk <- function(dataset, plot_type) {
   polya_bulk <- polya_bulk + ggtitle("Poly(A) length distribution")
 
   return(polya_bulk)
+}
+
+plot_urid <- function(dataset, threshold) {
+  urid_table <-dataset %>%
+    mutate(uridylated=case_when(add_tail_pct_T>=threshold ~ "uridylated",
+                                add_tail_pct_T<threshold ~ "not_uridylated",
+                                is.na(add_tail_pct_T) ~ "no_additional_tail")) %>%
+    group_by(origin, uridylated) %>%
+    summarise(n=n())
+  
+  print(dataset %>% select(add_tail_pct_T))
+  
+  ggplot(urid_table, aes(x=origin, y=n, fill=origin))+
+    geom_col(position='stack')+
+    theme(legend.position="bottom")+
+    facet_wrap(~uridylated) +
+    ggcustom_theme +
+    ggtitle("Number of reads by uridylation status") +
+    theme(legend.position = "bottom")
 }
 
 #### UI ####
@@ -298,6 +326,7 @@ dropdownMenuCustom <-     function (..., type = c("messages", "notifications", "
 customSentence <- function(numItems, type) {
   paste("Feedback & suggestions")
 }
+
 
 
 

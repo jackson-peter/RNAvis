@@ -1,10 +1,5 @@
 # Global.R is loaded once at App start (not at browser refresh!)
 
-# unload all libraries
-#lapply(paste('package:',names(sessionInfo()$otherPkgs),sep=""),detach,character.only=TRUE,unload=TRUE)
-
-
-
 HTSLIB_PATH = "/shared/biotools/htslib/1.18/bin/"
 README="/shared/home/jpeter/Scripts/RNAvis/README.md"
 

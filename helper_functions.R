@@ -61,17 +61,26 @@ read_tabixed_files_multiple_regions <- function(file, transcripts) {
 
 # Read GTF file for specified transcript
 read_GTF_file <- function(gtf, transcript) {
-  #dt <- fread(cmd = paste("grep", transcript, gtf, "| grep -P 'mRNA|exon|five_prime_UTR|three_prime_UTR'"), col.names = gtf_colnames) %>%
-  dt <- fread(cmd = paste("grep", transcript, gtf, "| grep -P 'mRNA|exon'"), col.names = gtf_colnames) %>%
-    mutate(transcript=transcript,
-           orientation=case_when(strand=='-' ~ 0,
-                                 strand=='+' ~ 1),
-           feat_type =case_when(feature=="mRNA" ~ "gene",
-                                TRUE ~ "subgene"),
-           ROI=paste0(seqnames, ":", start,"-", end)) %>%
-    select(-c(attributes))
 
-  return(dt)
+  #dt <- fread(cmd = paste("grep", transcript, gtf, "| grep -P 'mRNA|exon|five_prime_UTR|three_prime_UTR'"), col.names = gtf_colnames) %>%
+  dt <- fread(cmd = paste("grep", transcript, gtf, "| grep -P 'mRNA|exon'"), col.names = gtf_colnames)
+  
+  if (nrow(dt)>0) {
+    dt <- dt %>%
+      mutate(transcript=transcript,
+             orientation=case_when(strand=='-' ~ 0,
+                                   strand=='+' ~ 1),
+             feat_type =case_when(feature=="mRNA" ~ "gene",
+                                  TRUE ~ "subgene"),
+             ROI=paste0(seqnames, ":", start,"-", end)) %>%
+      select(-c(attributes))
+    
+    return(dt)
+    
+  }
+
+
+  
 }
 
 getIntronsRetained <- function(intron_name, retained_introns){
@@ -271,6 +280,20 @@ plot_urid <- function(dataset, threshold) {
     ggcustom_theme +
     ggtitle("Number of reads by uridylation status") +
     theme(legend.position = "bottom")
+}
+
+
+check_transcripts_list <- function(user_gene_list, total_gene_list) {
+
+  user_list <- fread(user_gene_list$datapath, header=F, col.names = "AGI") %>%
+    filter(AGI %in% total_gene_list$AGI) %>%
+    distinct(AGI) %>%
+    pull(AGI)
+  
+  return(user_list)
+  
+  #correct_list <- 
+  
 }
 
 #### UI ####

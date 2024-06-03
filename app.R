@@ -168,8 +168,10 @@ body <-
                 status = "primary", 
                 solidHeader = TRUE, 
                 title="Select your transcripts of interest",
-                column(width=9,
-                       selectizeInput("transcripts_sel", inputId = 'transcripts_sel', label = NULL, choices = NULL, selected = NULL, multiple = TRUE, options = list(create = FALSE))),
+                column(width=12,
+                       selectizeInput("transcripts_sel", inputId = 'transcripts_sel', label = "select genes from this list", choices = NULL, selected = NULL, multiple = TRUE, options = list(create = FALSE))),
+                column(width=12,
+                       fileInput("transcripts_upload", label="or upload a list", multiple = F, buttonLabel = "Browse...", placeholder = "No file selected")),
                 column(width=3,
                        actionButton(inputId = "Submittranscripts", label = "Get/Update Data")),
             )%>%
@@ -281,14 +283,22 @@ server <- function(input, output, session) {
 
   ## Dataset for list of transcripts
   transcripts_data <- eventReactive(input$Submittranscripts, {
-    req(input$runSelection, input$transcripts_sel)
-    GTF_DF <- rbindlist(lapply(input$transcripts_sel, read_GTF_file, gtf=ref_gtf))
+    req(input$runSelection,
+    isTruthy(input$transcripts_sel)|isTruthy(input$transcripts_upload))
+    if (isTruthy(input$transcripts_sel)) {
+      list_transcripts <- input$transcripts_sel
+      
+    } else if (isTruthy(input$transcripts_upload)) {
+      list_transcripts <- check_transcripts_list(input$transcripts_upload, gene_list_data())
+    }
+
+    GTF_DF <- rbindlist(lapply(list_transcripts, read_GTF_file, gtf=ref_gtf))
     tabixed_list <- global$sample_corr$tabix_file
     names(tabixed_list) <- global$sample_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
     column_names <- names(fread(cmd = paste('zcat ',global$sample_corr$tabix_file[1],' | head -n 1')))
     column_names <- c('origin', column_names)
-    transcripts_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_multiple_regions, transcripts=input$transcripts_sel), idcol = "origin")
+    transcripts_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_multiple_regions, transcripts=list_transcripts), idcol = "origin")
     colnames(transcripts_DF) <- column_names
     #transcripts_DF <- transcripts_DF %>%
     #  filter(origin %in% genoSelect())

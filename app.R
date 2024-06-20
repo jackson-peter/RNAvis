@@ -1,7 +1,10 @@
 source("helper_functions.R")
+source("config.R")
 source("global.R")
 
 theme_set(theme_bw())
+
+
 
 # UI ###########################################################
 # header ----
@@ -598,7 +601,7 @@ server <- function(input, output, session) {
       ggtitle("Mean coverage") +
       ggcustom_theme +
       theme(
-        legend.position = c(.05, .95),
+        legend.position.inside = c(.05, .95),
         legend.justification = c("left", "top"),
         legend.box.just = "left",
         legend.margin = margin(6, 6, 6, 6),
@@ -643,9 +646,9 @@ server <- function(input, output, session) {
       ggtitle("Mean number of reads") +
       ggcustom_theme +
       theme(
-        legend.position = c(.05, .95),
-        legend.justification = c("left", "top"),
-        legend.box.just = "left",
+        legend.position = c(.95, .95),
+        legend.justification = c("right", "top"),
+        legend.box.just = "right",
         legend.margin = margin(6, 6, 6, 6),
         legend.background = element_rect(fill="white", linewidth=0.5, linetype="solid", colour ="black")
       ) +

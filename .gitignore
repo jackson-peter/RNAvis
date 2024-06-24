@@ -1,4 +1,6 @@
 data/
 tabix_script.sh
 TAIR10_GFF3_genes_transposons.gff
+config.R
+generate_bulk_IG_pA.R
 

@@ -18,7 +18,6 @@ library(GenomicRanges)
 library(DT)
 library(ggsci)
 library(markdown)
-library(cowplot)
 library(rcartocolor)
 
 

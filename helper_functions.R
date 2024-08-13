@@ -26,11 +26,11 @@ get_flepruns <- function(datasets_path) {
   flep_runs <- list.dirs(datasets_path, recursive = F, full.names = T)
   flep_runs_df <- as.data.frame(flep_runs) %>%
     mutate(Run_bname = basename(flep_runs)) %>%
-    left_join(runs_infos, by=c("Run_bname"= "Run_name")) %>%
+    left_join(runs_infos, by=c("Run_bname"= "Run_bname")) %>%
     mutate(run_desc=
              case_when(
-               !is.na(Run_infos) ~ paste(Run_bname, Run_infos, sep=":"),
-               TRUE ~ Run_bname))
+               !is.na(Run_infos) ~ paste(Run_name, Run_infos, sep=":"),
+               TRUE ~ Run_name))
   return(flep_runs_df)
   
 }

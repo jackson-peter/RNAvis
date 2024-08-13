@@ -4,8 +4,6 @@ source("global.R")
 
 theme_set(theme_bw())
 
-
-
 # UI ###########################################################
 # header ----
 header <- 

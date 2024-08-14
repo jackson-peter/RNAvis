@@ -29,8 +29,12 @@ get_flepruns <- function(datasets_path) {
     left_join(runs_infos, by=c("Run_bname"= "Run_bname")) %>%
     mutate(run_desc=
              case_when(
-               !is.na(Run_infos) ~ paste(Run_name, Run_infos, sep=":"),
-               TRUE ~ Run_name))
+               !is.na(Run_infos) ~ paste(toupper(Run_name), Run_infos, sep=" :" ),
+               TRUE ~ Run_name)) %>%
+    mutate(tissue=factor(tissue)) %>% 
+    mutate(tissue=fct_relevel(tissue,c("Dry seeds","Imbibed seeds","Flowers", "Green silliques"))) %>%
+    arrange(tissue)
+  
   return(flep_runs_df)
   
 }
@@ -108,7 +112,7 @@ build_coords_df <- function(transcript_df, GTF_DF, intron_cols) {
   
   if (length(intron_cols)>0) {
 
-    cols_to_keep <- c(intron_cols,"orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read",  "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type", "sample_id")
+    cols_to_keep <- c(intron_cols,"orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read",  "polya_length", "additional_tail", "sample", "feat_id", "feature", "feat_type", "sample_id")
 
     # This data frame looks for the values of feat_id that are also column names (intron1 intron2 ...)
     # and checks whether it is retained or not.
@@ -131,7 +135,7 @@ build_coords_df <- function(transcript_df, GTF_DF, intron_cols) {
 
     
   } else  if (length(intron_cols)==0) {
-    cols_to_keep <- c("orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read", "polya_length", "additional_tail", "origin", "feat_id", "feature", "feat_type", "sample_id")
+    cols_to_keep <- c("orientation", "read_core_id", "mRNA", "retention_introns", "coords_in_read", "polya_length", "additional_tail", "sample", "feat_id", "feature", "feat_type", "sample_id")
 
     transcript_df_coords <-  bind_rows(transcript_df_coords, transcripts_df)
 
@@ -184,13 +188,13 @@ build_intronic_profile_for_plot <- function(filteredintron) {
   
   df_coords_gene <- coords_df %>% 
     filter(feat_type=="gene")
-  genotypes <- unique(coords_df$origin)
+  genotypes <- unique(coords_df$sample)
   gene_name <- unique(df_coords_gene$mRNA)
   
   # # gene: this is to have the 'model' of the intron profile
-  df_coords_gene <- df_coords_gene[!duplicated(df_coords_gene$mRNA, by=c("retention_introns", "origin")),]
+  df_coords_gene <- df_coords_gene[!duplicated(df_coords_gene$mRNA, by=c("retention_introns", "sample")),]
   df_coords_gene <- df_coords_gene[rep(seq_len(nrow(df_coords_gene)), each = length(genotypes)), ]
-  df_coords_gene$origin=genotypes
+  df_coords_gene$sample=genotypes
   # subgene (intron exon)
   df_coords_subgene <- coords_df %>% filter(feat_type=="subgene") %>%
     mutate(parent_start=unique(df_coords_gene$start),
@@ -242,21 +246,21 @@ build_intronic_profile_for_plot <- function(filteredintron) {
 
 plot_polya_bulk <- function(dataset, plot_type) {
   dataset <- dataset%>%
-    group_by(origin) %>%
+    group_by(sample) %>%
     mutate(label=paste0("n = ", n()),
-           origin=paste0(origin, " (", label, ")"))
+           sample=paste0(sample, " (", label, ")"))
   
   if (plot_type =="density") {
-    polya_bulk <- ggplot(dataset, aes(x=polya_length, fill=origin)) +
+    polya_bulk <- ggplot(dataset, aes(x=polya_length, fill=sample)) +
       geom_density(alpha=0.5, color="black")+
       ggcustom_theme +
       theme(legend.position="bottom") +
       theme(legend.background = element_rect(linewidth=0.5, linetype="solid"))
     
   } else {
-    polya_bulk <- ggplot(dataset, aes(x=polya_length, fill=origin, color=origin)) +
+    polya_bulk <- ggplot(dataset, aes(x=polya_length, fill=sample, color=sample)) +
       geom_bar()+
-      facet_wrap(~origin) + 
+      facet_wrap(~sample) + 
       ggcustom_theme +
       theme(legend.position="bottom") +
       theme(legend.background = element_rect(linewidth=0.5, linetype="solid")) 
@@ -272,12 +276,12 @@ plot_urid <- function(dataset, threshold) {
     mutate(uridylated=case_when(add_tail_pct_T>=threshold ~ "uridylated",
                                 add_tail_pct_T<threshold ~ "not_uridylated",
                                 is.na(add_tail_pct_T) ~ "no_additional_tail")) %>%
-    group_by(origin, uridylated) %>%
+    group_by(sample, uridylated) %>%
     summarise(n=n())
   
   print(dataset %>% select(add_tail_pct_T))
   
-  ggplot(urid_table, aes(x=origin, y=n, fill=origin))+
+  ggplot(urid_table, aes(x=sample, y=n, fill=sample))+
     geom_col(position='stack')+
     theme(legend.position="bottom")+
     facet_wrap(~uridylated) +
@@ -305,7 +309,13 @@ check_transcripts_list <- function(user_gene_list, total_gene_list) {
 ggcustom_theme <- list(
   theme_bw(),
   scale_color_carto_d(),
-  scale_fill_carto_d()
+  scale_fill_carto_d(),
+  theme(
+    axis.title.x = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.title.y = element_text(size = 14),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size=16))
 )
 
 dropdownMenuCustom <-     function (..., type = c("messages", "notifications", "tasks"), 

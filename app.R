@@ -63,18 +63,39 @@ body <-
                        downloadButton("download_sample_data", "Download")
                        ),
               tabPanel(h5("Run mapping stats"),
-                       splitLayout(plotOutput("numreads"),
-                                   plotOutput("numgenes"),
-                                   #plotOutput("mapq"),
-                                   cellWidths = c("50%", "50%"))
-                                ,width=11
+                       h4("Number of reads by sample"),
+                       dataTableOutput("smpl_reads"),
+                       hr(style = "border-top: 1px solid #000000;"),
+                       h4("Percentage of reads by sample"),
+                       plotOutput("pctreads"),
+                       hr(style = "border-top: 1px solid #000000;"),
+                       h4("Number of detected genes by sample"),
+                       plotOutput("numgenes"),
+                       hr(style = "border-top: 1px solid #000000;")
                        ),
-              tabPanel(h5("Bulk & Intergenic Poly(A) Distribution"),
-                       fluidRow(column(imageOutput("bulk_ig_global"), width=12))
+              tabPanel(h5("Poly(A) Distribution"),
+                       #fluidRow(column(imageOutput("bulk_ig_global"), width=12))
+                       
+                       fluidRow(column(h4("Bulk distribution of Poly(A) tail lengths"), width=12),
+                                column(imageOutput("bulk_polyA_global"), width=12, align="center"),
+                                column(hr(style = "border-top: 1px solid #000000;"), width=12)
+                                ),
+                       
+                       fluidRow(column(h4("Intergenic distribution of Poly(A) tail lengths"), width=12),
+                                column(imageOutput("ig_polyA_global"), width=12, align="center"),
+                                column(hr(style = "border-top: 1px solid #000000;"), width=12)
                        ),
-              tabPanel(h5("cumulative Poly(A) Distribution"),
-                       imageOutput("cumul_polyA_global")
-                       )
+                       
+                       # fluidRow(column(h4("Cumulative distribution of Poly(A) tail lengths"), width=12),
+                       #          column(imageOutput("cumul_polyA_global"), width=12, align="center"),
+                       #          column(hr(style = "border-top: 1px solid #000000;"), width=12)
+                       # ),
+                       
+
+                       ),
+              # tabPanel(h5("cumulative Poly(A) Distribution"),
+              #          imageOutput("cumul_polyA_global")
+              #          )
               ) #/ tabsetpanel
 
     ), # /tabitem run selector
@@ -267,7 +288,7 @@ server <- function(input, output, session) {
   MAP_data <- eventReactive(input$SubmitRunSel,{
     map_files <- global$sample_corr$map_file
     names(map_files) <- global$sample_corr$genotype
-    mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "origin") 
+    mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "sample") 
     
     return(mapping_q)
   })
@@ -276,7 +297,7 @@ server <- function(input, output, session) {
   gene_list_data <- eventReactive(input$SubmitRunSel,{
     gene_list_f <- global$sample_corr$gene_list
     names(gene_list_f) <- global$sample_corr$genotype
-    gene_list <- rbindlist(lapply(gene_list_f, fread, col.names="AGI"), idcol = "origin") 
+    gene_list <- rbindlist(lapply(gene_list_f, fread, col.names="AGI"), idcol = "sample") 
     
     return(gene_list)
   })
@@ -301,11 +322,11 @@ server <- function(input, output, session) {
     names(tabixed_list) <- global$sample_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
     column_names <- names(fread(cmd = paste('zcat ',global$sample_corr$tabix_file[1],' | head -n 1')))
-    column_names <- c('origin', column_names)
-    transcripts_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_multiple_regions, transcripts=list_transcripts), idcol = "origin")
+    column_names <- c('sample', column_names)
+    transcripts_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_multiple_regions, transcripts=list_transcripts), idcol = "sample")
     colnames(transcripts_DF) <- column_names
     #transcripts_DF <- transcripts_DF %>%
-    #  filter(origin %in% genoSelect())
+    #  filter(sample %in% genoSelect())
     updateSelectizeInput(session, "transcriptList_columnSel", choices=colnames(transcripts_DF))
     shinyalert("Nice!", paste(nrow(transcripts_DF), "transcripts in table"), type = "success")
     transcripts_DATA <- list(transcripts_DF = transcripts_DF, GTF_DF = GTF_DF)
@@ -351,13 +372,13 @@ server <- function(input, output, session) {
     
     # Building transcript dataset
     column_names <- names(fread(cmd = paste('zcat ',global$sample_corr$tabix_file[1],' | head -n 1')))
-    column_names <- c('origin', column_names)
+    column_names <- c('sample', column_names)
     tabixed_list <- global$sample_corr$tabix_file
     names(tabixed_list) <- global$sample_corr$genotype
     tabixed_df = setDT(as.list(tabixed_list))
     tryCatch(
       {
-        transcript_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_single_region, transcript=input$transcript_sel), idcol = "origin")
+        transcript_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_single_region, transcript=input$transcript_sel), idcol = "sample")
         shinyalert("Nice!", paste(nrow(transcript_DF), "transcripts in table"), type = "success")
       },
       error = function(cond) {shinyalert("OUCH", paste("Error:", cond), type = "error")}
@@ -379,9 +400,9 @@ server <- function(input, output, session) {
                    gff_strand=='+' ~ read_end+(round(polya_length) + nchar(additional_tail)),
                    gff_strand=='-' ~ read_start - (round(polya_length) + nchar(additional_tail)),
                  ))%>%
-          arrange(origin, sort_val1, sort_val2) %>%
+          arrange(sample, sort_val1, sort_val2) %>%
           select(-c(sort_val1, sort_val2, gff_strand)) %>%
-          group_by(origin, retention_introns) %>% 
+          group_by(sample, retention_introns) %>% 
           mutate(sample_id = row_number()) %>% 
           ungroup() %>%
           mutate(Run=basename(global$datapath))%>%
@@ -391,7 +412,7 @@ server <- function(input, output, session) {
         setDT(transcript_DF)
         
 
-        #%>% filter(origin %in% genoSelect())
+        #%>% filter(sample %in% genoSelect())
         
         n_introns <- unique(transcript_DF$mRNA_intron_num)
         if (n_introns>0) {
@@ -591,10 +612,10 @@ server <- function(input, output, session) {
     req(input$SubmitRunSel)
     print(MAP_data())
     cov <- MAP_data() %>%
-      group_by(origin, rname) %>%
+      group_by(sample, rname) %>%
       summarise(mean_cov=mean(coverage),
                 mean_mapq =mean(meanmapq))
-    ggplot(cov, aes(x=rname, y=mean_cov, fill=origin)) +
+    ggplot(cov, aes(x=rname, y=mean_cov, fill=sample)) +
       geom_col(position = "dodge", alpha=0.5, color="black") +
       ggtitle("Mean coverage") +
       ggcustom_theme +
@@ -615,33 +636,53 @@ server <- function(input, output, session) {
     print(gene_list_data())
 
     genes_by_sample <- gene_list_data() %>%
-      group_by(origin) %>%
+      group_by(sample) %>%
       dplyr::summarise(n_genes=n())
     
 
-    ggplot(genes_by_sample, aes(x=origin, y=n_genes, fill=origin)) +
+    ggplot(genes_by_sample, aes(x=sample, y=n_genes, fill=sample)) +
       geom_col(position = "dodge", alpha=0.5, color="black") +
-        ggtitle("Number of genes by sample") +
+        #ggtitle("Number of genes by sample") +
         ggcustom_theme +
         theme(
-          legend.position = "none") +
+          legend.position = "none",
+          axis.text.x=element_text(angle=90, hjust=1)) +
         xlab("sample") +
         ylab("Number of genes")
 
   })
   
   
-  ## nreads plot ----
-  output$numreads <- renderPlot({
+  output$smpl_reads <- DT::renderDataTable({
     req(input$SubmitRunSel)
-
+    
+    cov <- DT::datatable(MAP_data() %>%
+      select(-c("startpos", "endpos", "covbases", "coverage", "meandepth", "meanbaseq", "meanmapq")) %>%
+      group_by(sample)%>%
+      mutate(tot_read_smpl=sum(numreads)) %>%
+      print() %>%
+      pivot_wider(names_from = rname, values_from = numreads) %>%
+      
+      dplyr::rename(
+        "Sample" = sample,
+        "Number of reads"= tot_read_smpl)) 
+  })
+  
+  
+  ## pctreads plot ----
+  output$pctreads <- renderPlot({
+    req(input$SubmitRunSel)
+    
     cov <- MAP_data() %>%
-      group_by(origin, rname) %>%
-      summarise(mean_nreads=mean(numreads),
+      group_by(sample)%>%
+      mutate(tot_read_smpl=sum(numreads)) %>%
+      group_by(sample, rname) %>%
+      summarise(pct_chr=numreads/tot_read_smpl,
+                mean_nreads=mean(numreads),
                 mean_mapq =mean(meanmapq))
-    ggplot(cov, aes(x=rname, y=mean_nreads, fill=origin)) +
+    ggplot(cov, aes(x=rname, y=pct_chr, fill=sample)) +
       geom_col(position = "dodge", alpha=0.5, color="black") +
-      ggtitle("Mean number of reads") +
+      #ggtitle("Percentage of reads by sample") +
       ggcustom_theme +
       theme(
         legend.position = c(.95, .95),
@@ -651,7 +692,8 @@ server <- function(input, output, session) {
         legend.background = element_rect(fill="white", linewidth=0.5, linetype="solid", colour ="black")
       ) +
       xlab("Chromosome") +
-      ylab("Mean number of reads")
+      ylab("Read Percentage") +
+      scale_y_continuous(labels = scales::percent)
   })
   
   
@@ -660,10 +702,10 @@ server <- function(input, output, session) {
   output$mapq <- renderPlot({
     req(input$SubmitRunSel)
     cov <- MAP_data() %>%
-      group_by(origin, rname) %>%
+      group_by(sample, rname) %>%
       summarise(mean_cov=mean(coverage),
                 mean_mapq =mean(meanmapq))
-    ggplot(cov, aes(x=rname, y=mean_mapq, fill=origin)) +
+    ggplot(cov, aes(x=rname, y=mean_mapq, fill=sample)) +
       geom_col(position = "dodge", alpha=0.5, color="black") +
       ggtitle("Mean Mapping Quality")+
       ggcustom_theme +
@@ -739,24 +781,24 @@ server <- function(input, output, session) {
   output$bulk_polyA_global <- renderImage({
     req(input$SubmitRunSel)
     # Return a list containing the filename
-    list(src = global$bulk_polyA_global_f)
+    list(src = global$bulk_polyA_global_f, style="height: 100%")
     }, deleteFile = FALSE)
   
   output$ig_polyA_global <- renderImage({
     req(input$SubmitRunSel)
-    list(src=global$ig_polyA_global_f)
+    list(src=global$ig_polyA_global_f, style="height: 100%")
   }, deleteFile = FALSE)
   
   output$bulk_ig_global <- renderImage({
     req(input$SubmitRunSel)
     #list(src=global$bulk_ig_global_f, width = "100%", height = "700")
-    list(src=global$bulk_ig_global_f)
+    list(src=global$bulk_ig_global_f, style="height: 100%")
   }, deleteFile = FALSE)
   
   output$cumul_polyA_global <- renderImage({
     req(input$SubmitRunSel)
     # Return a list containing the filename
-    list(src = global$cumul_polyA_global_f)
+    list(src = global$cumul_polyA_global_f, style="height: 100%")
   }, deleteFile = FALSE)
 
   
@@ -787,7 +829,7 @@ server <- function(input, output, session) {
       # # ... annotated
       
        
-      facet_wrap(~origin, ncol = 1) +
+      facet_wrap(~sample, ncol = 1) +
       theme(strip.background =element_rect(fill="darkgrey"))+
       theme(strip.text = element_text(colour = 'white')) +
       theme(legend.position="bottom") +

@@ -500,11 +500,14 @@ server <- function(input, output, session) {
                    sample_file <- list.files(path=global$datapath, pattern=sample_table, full.names = T)
 
                    mapping_files <- list.files(path=file.path(global$datapath,mapping_dir), pattern=paste0(mapping_ext, "$"), full.names=T)
-                   
+                   print(sample_file)
                    global$sample_corr <- fread(sample_file, col.names = c("sample", "genotype"), header = F) %>%
                      mutate(tabix_file= file.path(global$datapath, tail_dir, paste0(sample, index_ext)),
                             map_file=file.path(global$datapath, mapping_dir, paste0(sample, mapping_ext)),
-                            gene_list=file.path(global$datapath, tail_dir, paste0(sample, tabix_l_ext)))
+                            gene_list=file.path(global$datapath, tail_dir, paste0(sample, tabix_l_ext))
+                            )
+                   print("ok")
+                   
                      
 
                    tabix_files_txt <- paste(basename(global$sample_corr$tabix_file), collapse='\n')

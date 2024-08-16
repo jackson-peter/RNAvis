@@ -1,9 +1,6 @@
-message("beginning app")
 source("helper_functions.R")
 source("config.R")
 source("global.R")
-
-
 
 theme_set(theme_bw())
 
@@ -289,18 +286,14 @@ server <- function(input, output, session) {
   
   ## Mapping data (coverage etc...)
   MAP_data <- eventReactive(input$SubmitRunSel,{
-    message("MAP_data")
     map_files <- global$sample_corr$map_file
-    message(map_files)
     names(map_files) <- global$sample_corr$genotype
     mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "sample") 
-    message(mapping_q)
     return(mapping_q)
   })
   
   ## gene list data 
   gene_list_data <- eventReactive(input$SubmitRunSel,{
-    message("gene list")
     gene_list_f <- global$sample_corr$gene_list
     names(gene_list_f) <- global$sample_corr$genotype
     gene_list <- rbindlist(lapply(gene_list_f, fread, col.names="AGI"), idcol = "sample") 
@@ -493,7 +486,6 @@ server <- function(input, output, session) {
                handlerExpr = {
                  
                  # Sets paths variables
-                 message("event runsel")
                  if (!input$runSelection == "") {
 
                    global$datapath <- input$runSelection
@@ -512,26 +504,17 @@ server <- function(input, output, session) {
                             map_file=file.path(global$datapath, mapping_dir, paste0(sample, mapping_ext)),
                             gene_list=file.path(global$datapath, tail_dir, paste0(sample, tabix_l_ext))
                             )
-                   message("ok")
                    
-                     
-
                    tabix_files_txt <- paste(basename(global$sample_corr$tabix_file), collapse='\n')
-                   message("ok2")
                    shinyalert("Nice!", paste("Successfully added", tabix_files_txt, sep="\n"), type = "success")
-                   message("ok3")
                    genes_list=unique(rbindlist(lapply(global$sample_corr$gene_list, fread, header=F)))
-                   message("ok4")
                    updateSelectizeInput(session, 'transcript_sel', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
                    updateSelectizeInput(session, 'transcripts_sel', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
-                   message("ok5")
                    listf <- global$sample_corr$tabix_file
                    names(listf) <- basename(global$sample_corr$tabix_file)
                    updateSelectizeInput(session, 'download_sample_sel', label=NULL, selected="", choices = listf, options = list(create = FALSE), server = TRUE)
-                   message("ok6")
                    updateTabsetPanel(session, "run_tabsetPanel",
                                      selected = "dl_tabPanel")
-                   message("ok7")
                  }
                }) # end observer runSelection
   
@@ -611,8 +594,12 @@ server <- function(input, output, session) {
   
   ## GTF table ----
   output$GTFtable_single <- renderDataTable(
-    req(transcript_data()$GTF_DF %>%
-          relocate(transcript)),
+    req(datatable(transcript_data()$GTF_DF %>%
+          relocate(transcript)) %>% 
+          formatStyle('feature',
+            target = 'row',
+            backgroundColor = styleEqual(c("exon", "intron", "mRNA"), carto_pal(3, "Vivid"))
+          )),
     options = list(pageLength = 50)
   )
   
@@ -625,7 +612,6 @@ server <- function(input, output, session) {
   ## coverage plot ----
   output$coverage <- renderPlot({
     req(input$SubmitRunSel)
-    message("coverage plot")
     cov <- MAP_data() %>%
       group_by(sample, rname) %>%
       summarise(mean_cov=mean(coverage),
@@ -649,8 +635,6 @@ server <- function(input, output, session) {
   output$numgenes <- renderPlot({
     req(input$SubmitRunSel)
     print(gene_list_data())
-    message("numgenes plot")
-
     genes_by_sample <- gene_list_data() %>%
       group_by(sample) %>%
       dplyr::summarise(n_genes=n())
@@ -671,7 +655,6 @@ server <- function(input, output, session) {
   
   output$smpl_reads <- DT::renderDataTable({
     req(input$SubmitRunSel)
-    message("smpl_reads plot")
     cov <- DT::datatable(MAP_data() %>%
       select(-c("startpos", "endpos", "covbases", "coverage", "meandepth", "meanbaseq", "meanmapq")) %>%
       group_by(sample)%>%
@@ -688,7 +671,6 @@ server <- function(input, output, session) {
   ## pctreads plot ----
   output$pctreads <- renderPlot({
     req(input$SubmitRunSel)
-    message("pctreads plot")
     cov <- MAP_data() %>%
       group_by(sample)%>%
       mutate(tot_read_smpl=sum(numreads)) %>%
@@ -717,7 +699,6 @@ server <- function(input, output, session) {
   ## mapping quality plot ----
   output$mapq <- renderPlot({
     req(input$SubmitRunSel)
-    message("mapq plot")
     cov <- MAP_data() %>%
       group_by(sample, rname) %>%
       summarise(mean_cov=mean(coverage),
@@ -797,27 +778,23 @@ server <- function(input, output, session) {
 
   output$bulk_polyA_global <- renderImage({
     req(input$SubmitRunSel)
-    message("bulk_polyA_global plot")
     # Return a list containing the filename
     list(src = global$bulk_polyA_global_f, style="height: 100%")
     }, deleteFile = FALSE)
   
   output$ig_polyA_global <- renderImage({
     req(input$SubmitRunSel)
-    message("ig_polyA_global plot")
     list(src=global$ig_polyA_global_f, style="height: 100%")
   }, deleteFile = FALSE)
   
   output$bulk_ig_global <- renderImage({
     req(input$SubmitRunSel)
-    message("bulk_ig_global plot")
     #list(src=global$bulk_ig_global_f, width = "100%", height = "700")
     list(src=global$bulk_ig_global_f, style="height: 100%")
   }, deleteFile = FALSE)
   
   output$cumul_polyA_global <- renderImage({
     req(input$SubmitRunSel)
-    message("cumul_polyA_global plot")
     # Return a list containing the filename
     list(src = global$cumul_polyA_global_f, style="height: 100%")
   }, deleteFile = FALSE)
@@ -830,6 +807,10 @@ server <- function(input, output, session) {
     
     validate(need(!is.null(input$retention_introns), "Please select an intron profile"))
     total_data <- build_intronic_profile_for_plot(filteredintron())
+    
+    print(unique(total_data$df_coords_transcript_subgene_tail$feature))
+    total_data$df_coords_transcript_subgene_tail$feature <- factor(total_data$df_coords_transcript_subgene_tail$feature,
+                                                                   levels = intronic_prfl_ftrs)
 
     # plot
     ggplot() +
@@ -858,7 +839,8 @@ server <- function(input, output, session) {
       ggtitle(total_data$gene_name) +
       coord_cartesian(xlim = ranges$x_plot_reads, ylim = ranges$y_plot_reads, expand = T) +
       theme(strip.text = element_text(
-        size = 20, color = "black"))
+        size = 20, color = "black")) +
+      scale_fill_manual(values=intronic_prfl_clrs)
     
   }, height = 1500)
   

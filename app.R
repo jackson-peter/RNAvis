@@ -1,6 +1,10 @@
+
+message("beginning app")
 source("helper_functions.R")
 source("config.R")
 source("global.R")
+
+
 
 theme_set(theme_bw())
 
@@ -287,9 +291,10 @@ server <- function(input, output, session) {
   ## Mapping data (coverage etc...)
   MAP_data <- eventReactive(input$SubmitRunSel,{
     map_files <- global$sample_corr$map_file
+    message(map_files)
     names(map_files) <- global$sample_corr$genotype
     mapping_q <- rbindlist(lapply(map_files, fread, col.names=mapping_cols), idcol = "sample") 
-    
+    message(mapping_q)
     return(mapping_q)
   })
   

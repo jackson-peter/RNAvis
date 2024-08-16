@@ -1,5 +1,5 @@
 # Global.R is loaded once at App start (not at browser refresh!)
-
+message("sourcing global")
 # FLEP seq results organisation
 mapping_dir="2_Mapping"
 tail_dir="4_Tail"

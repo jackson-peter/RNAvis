@@ -1,4 +1,3 @@
-devmode(TRUE)
 message("beginning app")
 source("helper_functions.R")
 source("config.R")
@@ -626,7 +625,7 @@ server <- function(input, output, session) {
   ## coverage plot ----
   output$coverage <- renderPlot({
     req(input$SubmitRunSel)
-    message("MAP_data()")
+    message("coverage plot")
     cov <- MAP_data() %>%
       group_by(sample, rname) %>%
       summarise(mean_cov=mean(coverage),
@@ -650,6 +649,7 @@ server <- function(input, output, session) {
   output$numgenes <- renderPlot({
     req(input$SubmitRunSel)
     print(gene_list_data())
+    message("numgenes plot")
 
     genes_by_sample <- gene_list_data() %>%
       group_by(sample) %>%
@@ -671,7 +671,7 @@ server <- function(input, output, session) {
   
   output$smpl_reads <- DT::renderDataTable({
     req(input$SubmitRunSel)
-    
+    message("smpl_reads plot")
     cov <- DT::datatable(MAP_data() %>%
       select(-c("startpos", "endpos", "covbases", "coverage", "meandepth", "meanbaseq", "meanmapq")) %>%
       group_by(sample)%>%
@@ -688,7 +688,7 @@ server <- function(input, output, session) {
   ## pctreads plot ----
   output$pctreads <- renderPlot({
     req(input$SubmitRunSel)
-    
+    message("pctreads plot")
     cov <- MAP_data() %>%
       group_by(sample)%>%
       mutate(tot_read_smpl=sum(numreads)) %>%
@@ -717,6 +717,7 @@ server <- function(input, output, session) {
   ## mapping quality plot ----
   output$mapq <- renderPlot({
     req(input$SubmitRunSel)
+    message("mapq plot")
     cov <- MAP_data() %>%
       group_by(sample, rname) %>%
       summarise(mean_cov=mean(coverage),
@@ -796,23 +797,27 @@ server <- function(input, output, session) {
 
   output$bulk_polyA_global <- renderImage({
     req(input$SubmitRunSel)
+    message("bulk_polyA_global plot")
     # Return a list containing the filename
     list(src = global$bulk_polyA_global_f, style="height: 100%")
     }, deleteFile = FALSE)
   
   output$ig_polyA_global <- renderImage({
     req(input$SubmitRunSel)
+    message("ig_polyA_global plot")
     list(src=global$ig_polyA_global_f, style="height: 100%")
   }, deleteFile = FALSE)
   
   output$bulk_ig_global <- renderImage({
     req(input$SubmitRunSel)
+    message("bulk_ig_global plot")
     #list(src=global$bulk_ig_global_f, width = "100%", height = "700")
     list(src=global$bulk_ig_global_f, style="height: 100%")
   }, deleteFile = FALSE)
   
   output$cumul_polyA_global <- renderImage({
     req(input$SubmitRunSel)
+    message("cumul_polyA_global plot")
     # Return a list containing the filename
     list(src = global$cumul_polyA_global_f, style="height: 100%")
   }, deleteFile = FALSE)

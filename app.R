@@ -290,6 +290,7 @@ server <- function(input, output, session) {
   
   ## Mapping data (coverage etc...)
   MAP_data <- eventReactive(input$SubmitRunSel,{
+    message("MAP_data")
     map_files <- global$sample_corr$map_file
     message(map_files)
     names(map_files) <- global$sample_corr$genotype
@@ -300,6 +301,7 @@ server <- function(input, output, session) {
   
   ## gene list data 
   gene_list_data <- eventReactive(input$SubmitRunSel,{
+    message("gene list")
     gene_list_f <- global$sample_corr$gene_list
     names(gene_list_f) <- global$sample_corr$genotype
     gene_list <- rbindlist(lapply(gene_list_f, fread, col.names="AGI"), idcol = "sample") 
@@ -492,7 +494,7 @@ server <- function(input, output, session) {
                handlerExpr = {
                  
                  # Sets paths variables
-                 
+                 message("event runsel")
                  if (!input$runSelection == "") {
 
                    global$datapath <- input$runSelection
@@ -511,20 +513,26 @@ server <- function(input, output, session) {
                             map_file=file.path(global$datapath, mapping_dir, paste0(sample, mapping_ext)),
                             gene_list=file.path(global$datapath, tail_dir, paste0(sample, tabix_l_ext))
                             )
-                   print("ok")
+                   message("ok")
                    
                      
 
                    tabix_files_txt <- paste(basename(global$sample_corr$tabix_file), collapse='\n')
+                   message("ok2")
                    shinyalert("Nice!", paste("Successfully added", tabix_files_txt, sep="\n"), type = "success")
+                   message("ok3")
                    genes_list=unique(rbindlist(lapply(global$sample_corr$gene_list, fread, header=F)))
+                   message("ok4")
                    updateSelectizeInput(session, 'transcript_sel', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
                    updateSelectizeInput(session, 'transcripts_sel', label=NULL, selected="", choices = genes_list$V1, options = list(create = FALSE), server = TRUE)
+                   message("ok5")
                    listf <- global$sample_corr$tabix_file
                    names(listf) <- basename(global$sample_corr$tabix_file)
                    updateSelectizeInput(session, 'download_sample_sel', label=NULL, selected="", choices = listf, options = list(create = FALSE), server = TRUE)
+                   message("ok6")
                    updateTabsetPanel(session, "run_tabsetPanel",
                                      selected = "dl_tabPanel")
+                   message("ok7")
                  }
                }) # end observer runSelection
   

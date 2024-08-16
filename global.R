@@ -18,3 +18,4 @@ transcript_col=4
 start_col=6
 end_col=7
 DOC_DIR <- file.path("www","doc_markdowns")
+message("sourcing global done")

@@ -1,4 +1,4 @@
-
+devmode(TRUE)
 message("beginning app")
 source("helper_functions.R")
 source("config.R")
@@ -626,7 +626,7 @@ server <- function(input, output, session) {
   ## coverage plot ----
   output$coverage <- renderPlot({
     req(input$SubmitRunSel)
-    print(MAP_data())
+    message("MAP_data()")
     cov <- MAP_data() %>%
       group_by(sample, rname) %>%
       summarise(mean_cov=mean(coverage),

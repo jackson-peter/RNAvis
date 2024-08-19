@@ -66,11 +66,15 @@ body <-
                        h4("Number of reads by sample"),
                        dataTableOutput("smpl_reads"),
                        hr(style = "border-top: 1px solid #000000;"),
-                       h4("Percentage of reads by sample"),
+                       h4("Percentage of reads by chromosome"),
                        plotOutput("pctreads"),
                        hr(style = "border-top: 1px solid #000000;"),
                        h4("Number of detected genes by sample"),
-                       plotOutput("numgenes"),
+                       plotOutput("numgenes") %>% 
+                         helper(icon = "question",
+                                colour = "grey",
+                                type = "markdown",
+                                content = "plot_numgenes"),
                        hr(style = "border-top: 1px solid #000000;")
                        ),
               tabPanel(h5("Poly(A) Distribution"),
@@ -664,7 +668,11 @@ server <- function(input, output, session) {
       
       dplyr::rename(
         "Sample" = sample,
-        "Number of reads"= tot_read_smpl)) 
+        "Number of reads"= tot_read_smpl),
+      options = list(
+        paging =TRUE,
+        pageLength =  input$rows 
+      )) 
   })
   
   
@@ -807,40 +815,43 @@ server <- function(input, output, session) {
     
     validate(need(!is.null(input$retention_introns), "Please select an intron profile"))
     total_data <- build_intronic_profile_for_plot(filteredintron())
-    
+    strand=unique(total_data$df_coords_subgene$strand[!is.na(total_data$df_coords_subgene$strand)])
+
     print(unique(total_data$df_coords_transcript_subgene_tail$feature))
     total_data$df_coords_transcript_subgene_tail$feature <- factor(total_data$df_coords_transcript_subgene_tail$feature,
                                                                    levels = intronic_prfl_ftrs)
 
     # plot
-    ggplot() +
-      # transcripts.....
-      #geom_rect(data=total_data$df_coords_transcript,
-      #          aes(xmin = start, xmax = end, ymin = sample_id, ymax=sample_id + 0.5 ), fill="grey",alpha=.8)+
+    p <- ggplot() +
       geom_rect(data = total_data$df_coords_transcript_subgene_tail,
                 aes(xmin = start, xmax = end, ymin = sample_id , ymax=sample_id +0.5,fill = feature), alpha=.8 ) +
-      geom_segment(data=total_data$df_coords_transcript, aes(x = start, y = sample_id+0.25, xend = end, yend = sample_id+0.25),color = "black") +
-      # .... annotated
-      
-      
-      # model gene ...
-      # geom_rect(data = total_data$df_coords_subgene,
-      #           aes(xmin = start, xmax = end, ymin = 0, ymax= 0.5 , fill = feature)) +
-      # geom_segment(data=total_data$df_coords_gene, 
-      #                 aes(x = start, xend = end, y = 0.25, yend= 0.25), color = "black") +
-      # # ... annotated
-      
-       
       facet_wrap(~sample, ncol = 1) +
       theme(strip.background =element_rect(fill="darkgrey"))+
       theme(strip.text = element_text(colour = 'white')) +
       theme(legend.position="bottom") +
       theme(legend.background = element_rect(linewidth=0.5, linetype="solid")) +
-      ggtitle(total_data$gene_name) +
+      ggtitle(paste(total_data$gene_name, '(', strand, "strand)")) +
       coord_cartesian(xlim = ranges$x_plot_reads, ylim = ranges$y_plot_reads, expand = T) +
       theme(strip.text = element_text(
         size = 20, color = "black")) +
-      scale_fill_manual(values=intronic_prfl_clrs)
+      scale_fill_manual(values=intronic_prfl_clrs) +
+      ggcustom_theme + 
+      theme(axis.ticks.x=element_blank(), 
+            axis.text.y=element_blank()) +
+      ylab("")
+    
+    if ( strand=="+") {
+      p <- p +
+        geom_segment(data=total_data$df_coords_transcript, aes(x = start, y = sample_id+0.25, xend = end, yend = sample_id+0.25),
+                     color = "black", arrow = arrow(length = unit(0.2, "cm")))
+    } else if (strand == "-") {
+      p <- p +
+        geom_segment(data=total_data$df_coords_transcript, aes(x = start, y = sample_id+0.25, xend = end, yend = sample_id+0.25),
+                     color = "black", arrow = arrow(length = unit(0.2, "cm"), ends = "first"))
+      
+    }
+    
+    return(p)
     
   }, height = 1500)
   

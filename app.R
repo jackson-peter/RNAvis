@@ -70,7 +70,7 @@ body <-
                        selectizeInput("download_sample_sel", inputId = 'download_sample_sel', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE)),
                        downloadButton("download_sample_data", "Download")
                        ),
-              tabPanel(h5("Run mapping stats"),
+              tabPanel(h5("Run Mapping Stats"),
                        h4("Number of reads by sample"),
                        dataTableOutput("smpl_reads"),
                        hr(style = "border-top: 1px solid #000000;"),
@@ -175,13 +175,14 @@ body <-
                        
                        ), # /tabpanel
               tabPanel(h5("Additional Tail"),
+                       h4("Number of reads by uridylation status"),
                        box(width=12,
-                           sliderInput("urid_thresh_single", "Uridylation percentage threshold:", value = 60, min = 0, max = 100, width= "50%")%>%
-                             helper(icon = "question",
-                                    colour = "grey",
-                                    type = "markdown",
-                                    content = "urid_thresh"),
-                           plotOutput("urid_single"))
+                           plotOutput("urid_single")),
+                       sliderInput("urid_thresh_single", "Uridylation percentage threshold:", value = 60, min = 0, max = 100, width= "50%")%>%
+                         helper(icon = "question",
+                                colour = "grey",
+                                type = "markdown",
+                                content = "urid_thresh")
                        )
               ) # / tabsetpanel
 

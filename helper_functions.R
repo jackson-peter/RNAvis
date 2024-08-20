@@ -272,9 +272,9 @@ plot_polya_bulk <- function(dataset, plot_type) {
 
 plot_urid <- function(dataset, threshold) {
   urid_table <-dataset %>%
-    mutate(uridylated=case_when(add_tail_pct_T>=threshold ~ "uridylated",
-                                add_tail_pct_T<threshold ~ "not_uridylated",
-                                is.na(add_tail_pct_T) ~ "no_additional_tail")) %>%
+    mutate(uridylated=case_when(add_tail_pct_T>=threshold ~ "U-Tail",
+                                add_tail_pct_T<threshold ~ "Tailing",
+                                is.na(add_tail_pct_T) ~ "No Tailing")) %>%
     group_by(sample, uridylated) %>%
     summarise(n=n())
   
@@ -285,8 +285,9 @@ plot_urid <- function(dataset, threshold) {
     theme(legend.position="bottom")+
     facet_wrap(~uridylated) +
     ggcustom_theme +
-    ggtitle("Number of reads by uridylation status") +
-    theme(legend.position = "bottom")
+    theme(legend.position = "bottom",
+          strip.text = element_text(size = 20),
+          axis.text.x=element_text(angle=90, hjust=1))
 }
 
 

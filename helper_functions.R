@@ -51,7 +51,6 @@ shinyInput <- function(FUN,id,num,...) {
 
 # Read only part of files containing users' transcript 
 read_tabixed_files_single_region <- function(file, transcript) {
-  print(HTSLIB_PATH)
   dt <- fread(cmd = paste(file.path(HTSLIB_PATH, "tabix"), file, transcript, "-h"), header = F)
   return(dt)
   }

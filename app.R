@@ -3,9 +3,11 @@ source("config.R")
 source("global.R")
 
 theme_set(theme_bw())
+###########################################################-
+# UI ----
+###########################################################-
 
-# UI ###########################################################
-# header ----
+## header ----
 header <- 
   dashboardHeader(title = HTML("RNAvis"),
                    disable = F,
@@ -19,7 +21,7 @@ header <-
                                        icon = icon('comment'))
                    ) #/ dashboardheader
 
-# sidebar ----
+## sidebar ----
 sidebar <-
   dashboardSidebar(
     hr(),
@@ -35,23 +37,29 @@ sidebar <-
   ) #/ dashboardsidebar
 
 
-# body ----
+## body ----
 body <-
   dashboardBody(
   tags$head(includeCSS("www/custom.css")),
   
   tabItems(
-    # sidebar Tab: run selector ----
+    ### TabItem run tab ----
     tabItem(tabName = "runTab",
             # Inputs box ---
-            box(width = 12, status = "primary", solidHeader = T, title="chose a FLEPseq run",
-                fluidRow(column(selectizeInput("runSelection", inputId = 'runSelection', label=NULL, choices = c("Choose a run" = "", flep_runs), multiple = FALSE), width=9 ),
-                         actionButton("SubmitRunSel", "Get the data!"), width=3)
-                )%>% 
+            box(width = 12, 
+                status = "primary", 
+                solidHeader = TRUE, 
+                title="chose a FLEPseq run",
+                column(width=9,
+                       selectizeInput("runSelection", inputId = 'runSelection', label = NULL, choices = c("Choose a run" = "", flep_runs), selected = NULL, multiple = FALSE, options = list(create = FALSE))),
+                column(width=3,
+                       actionButton(inputId = "SubmitRunSel", label = "Get the data!")),
+            )%>% 
               helper(icon = "question",
                      colour = "grey",
                      type = "markdown",
                      content = "runSelection"),
+
             # /box
             # plots about run
             tabsetPanel(id = "run_tabsetPanel",
@@ -88,24 +96,15 @@ body <-
                        fluidRow(column(h4("Intergenic distribution of Poly(A) tail lengths"), width=12),
                                 column(imageOutput("ig_polyA_global"), width=12, align="center"),
                                 column(hr(style = "border-top: 1px solid #000000;"), width=12)
-                       ),
+                                ),
                        
-                       # fluidRow(column(h4("Cumulative distribution of Poly(A) tail lengths"), width=12),
-                       #          column(imageOutput("cumul_polyA_global"), width=12, align="center"),
-                       #          column(hr(style = "border-top: 1px solid #000000;"), width=12)
-                       # ),
-                       
-
                        ),
-              # tabPanel(h5("cumulative Poly(A) Distribution"),
-              #          imageOutput("cumul_polyA_global")
-              #          )
-              ) #/ tabsetpanel
+            ),
 
     ), # /tabitem run selector
     
     
-    # tabitem transcriptSpecificTab -----
+    ### Tabitem transcriptSpecificTab -----
     tabItem(tabName = "transcriptSpecificTab",
             box(width = 12, 
                 status = "primary", 
@@ -188,7 +187,7 @@ body <-
 
     ), #/ tabitem transcriptspecificTab
     
-    # Tabbitem transcriptlistTab -----
+    ### Tabbitem transcriptlistTab -----
     tabItem(tabName = "transcriptsListTab",    
             box(width = 12, 
                 status = "primary", 
@@ -266,15 +265,18 @@ body <-
   ) #/ tabitems
 ) #/ dashboardbody 
 
-
-# UI construction --------------------------------------------------------------
+###########################################################-
+# UI construction -----
+###########################################################-
 ui <- dashboardPage(skin="green",
   header, 
   sidebar,
   body
 )
 
-# SERVER ###########################################################
+###########################################################-
+# SERVER ----
+###########################################################-
 server <- function(input, output, session) {
   # This function stops the execution and fixes the bug requiring R termination when closing app
   session$onSessionEnded(function() {
@@ -283,12 +285,13 @@ server <- function(input, output, session) {
   
   global <- reactiveValues(datapath = getwd())
   observe_helpers(withMathJax = TRUE, help_dir = DOC_DIR)
-  ### REACTIVE DATA ------------------------------------------------------------
   
-  # Single zoomable plot
+  ## REACTIVE DATA ----
+  
+  ### Single zoomable plot ----
   ranges <- reactiveValues(x = NULL, y = NULL)
   
-  ## Mapping data (coverage etc...)
+  ### Mapping data (coverage etc...) ----
   MAP_data <- eventReactive(input$SubmitRunSel,{
     map_files <- global$sample_corr$map_file
     names(map_files) <- global$sample_corr$genotype
@@ -296,7 +299,7 @@ server <- function(input, output, session) {
     return(mapping_q)
   })
   
-  ## gene list data 
+  ### gene list data ----
   gene_list_data <- eventReactive(input$SubmitRunSel,{
     gene_list_f <- global$sample_corr$gene_list
     names(gene_list_f) <- global$sample_corr$genotype
@@ -306,7 +309,7 @@ server <- function(input, output, session) {
   })
   
 
-  ## Dataset for list of transcripts
+  ### Dataset for list of transcripts ----
   transcripts_data <- eventReactive(input$Submittranscripts, {
     req(input$runSelection,
     isTruthy(input$transcripts_sel)|isTruthy(input$transcripts_upload))
@@ -314,7 +317,6 @@ server <- function(input, output, session) {
       list_transcripts <- input$transcripts_sel
       
     } else if (isTruthy(input$transcripts_upload)) {
-      print("list")
       list_transcripts <- check_transcripts_list(input$transcripts_upload, gene_list_data())
     }
     
@@ -328,8 +330,6 @@ server <- function(input, output, session) {
     column_names <- c('sample', column_names)
     transcripts_DF <- rbindlist(lapply(tabixed_df, read_tabixed_files_multiple_regions, transcripts=list_transcripts), idcol = "sample")
     colnames(transcripts_DF) <- column_names
-    #transcripts_DF <- transcripts_DF %>%
-    #  filter(sample %in% genoSelect())
     updateSelectizeInput(session, "transcriptList_columnSel", choices=colnames(transcripts_DF))
     shinyalert("Nice!", paste(nrow(transcripts_DF), "transcripts in table"), type = "success")
     transcripts_DATA <- list(transcripts_DF = transcripts_DF, GTF_DF = GTF_DF)
@@ -339,7 +339,7 @@ server <- function(input, output, session) {
 
   })
   
-  ## transcript specific data (FLEPseq results, gtf and coordinates)
+  ### transcript specific data (FLEPseq results, gtf and coordinates) ----
   transcript_data <- eventReactive(input$Submittranscript,{
     req(input$runSelection, input$transcript_sel)
     # GTF gymnastics to handle introns
@@ -390,7 +390,6 @@ server <- function(input, output, session) {
     tryCatch(
       expr = {
         colnames(transcript_DF) <- column_names
-        print(column_names)
         gff_strand=unique(GTF_DF$strand)
         transcript_DF <- transcript_DF %>%
           separate(read_core_id, into=c("read_id", "chr", "read_start", "read_end"), sep = ',' , remove = F, convert = T)%>%
@@ -413,10 +412,6 @@ server <- function(input, output, session) {
           mutate(retention_introns = replace_na(retention_introns, "none")) 
         
         setDT(transcript_DF)
-        
-
-        #%>% filter(sample %in% genoSelect())
-        
         n_introns <- unique(transcript_DF$mRNA_intron_num)
         if (n_introns>0) {
           intron_cols <- paste0("intron",1:n_introns)
@@ -442,7 +437,7 @@ server <- function(input, output, session) {
     return(transcript_DATA)
   })
 
-  ## Dataset filtered by intronic profile
+  ### Dataset filtered by intronic profile ----
   filteredintron <- reactive({ 
     
     filtered_df<- transcript_data()$COORDS_DF %>% 
@@ -453,7 +448,7 @@ server <- function(input, output, session) {
 
   })
   
-  ## Dataset column subsets (1 transcript) ----
+  ### Dataset column subsets (1 transcript) ----
   filtereddata_single <- eventReactive(input$getFlepTable_single,{
     
     if (is.null(input$singleTranscript_columnSel)) {
@@ -467,7 +462,7 @@ server <- function(input, output, session) {
     
   })
   
-  ## Dataset column subsets (multiple transcripts) ----
+  ### Dataset column subsets (multiple transcripts) ----
   filtereddata_list <- eventReactive(input$getFlepTable_list,{
     
     if (is.null(input$transcriptList_columnSel)) {
@@ -481,9 +476,11 @@ server <- function(input, output, session) {
     
   })
   
-  ### OBSERVERS ---------------------------------------------------------------
-
-  ## Observer for runSelection. 
+  ###########################################################-
+  # OBSERVERS ------
+  ###########################################################-
+  
+  ## Observer for runSelection.  ----
   observeEvent(ignoreNULL = TRUE,
                #eventExpr = {input$runSelection},
                eventExpr = {input$SubmitRunSel},
@@ -502,7 +499,6 @@ server <- function(input, output, session) {
                    sample_file <- list.files(path=global$datapath, pattern=sample_table, full.names = T)
 
                    mapping_files <- list.files(path=file.path(global$datapath,mapping_dir), pattern=paste0(mapping_ext, "$"), full.names=T)
-                   print(sample_file)
                    global$sample_corr <- fread(sample_file, col.names = c("sample", "genotype"), header = F) %>%
                      mutate(tabix_file= file.path(global$datapath, tail_dir, paste0(sample, index_ext)),
                             map_file=file.path(global$datapath, mapping_dir, paste0(sample, mapping_ext)),
@@ -522,11 +518,55 @@ server <- function(input, output, session) {
                  }
                }) # end observer runSelection
   
+  # When a double-click happens, check if there's a brush on the plot.
+  # If so, zoom to the brush bounds; if not, reset the zoom.
+  observeEvent(input$polyaDistr_list_dblclick, {
+    polyaDistr_list_brush <- input$polyaDistr_list_brush
+    if (!is.null(polyaDistr_list_brush)) {
+      ranges$x_polyaDistr_list <- c(polyaDistr_list_brush$xmin, polyaDistr_list_brush$xmax)
+      ranges$y_polyaDistr_list <- c(polyaDistr_list_brush$ymin, polyaDistr_list_brush$ymax)
+      
+    } else {
+      ranges$x_polyaDistr_list <- NULL
+      ranges$y_polyaDistr_list <- NULL
+    }
+  })
   
+  
+  observeEvent(input$plot_reads_dblclick, {
+    plot_reads_brush <- input$plot_reads_brush
+    if (!is.null(plot_reads_brush)) {
+      ranges$x_plot_reads <- c(plot_reads_brush$xmin, plot_reads_brush$xmax)
+      ranges$y_plot_reads <- c(plot_reads_brush$ymin, plot_reads_brush$ymax)
+      
+    } else {
+      ranges$x_plot_reads <- NULL
+      ranges$y_plot_reads <- NULL
+    }
 
-  ### OUTPUTS ---------------------------------------------------------------
+    return(ranges)
+  })
+  
+  # When a double-click happens, check if there's a brush on the plot.
+  # If so, zoom to the brush bounds; if not, reset the zoom.
+  observeEvent(input$polyaDistr_single_dblclick, {
+    polyaDistr_single_brush <- input$polyaDistr_single_brush
+    if (!is.null(polyaDistr_single_brush)) {
+      ranges$x_polyaDistr_single <- c(polyaDistr_single_brush$xmin, polyaDistr_single_brush$xmax)
+      ranges$y_polyaDistr_single <- c(polyaDistr_single_brush$ymin, polyaDistr_single_brush$ymax)
+      
+    } else {
+      ranges$x_polyaDistr_single <- NULL
+      ranges$y_polyaDistr_single <- NULL
+    }
+  })
+  
+  
+  ###########################################################-
+  # OUTPUTS ---------------------------------------------------------------
+  ###########################################################-
 
-  ## intronic profile selection (radiobuttons) ----
+  ## intron_profile_sel  ----
   output$intron_profile_sel <- renderUI({
     req(transcript_data())
     tryCatch( { 
@@ -537,6 +577,7 @@ server <- function(input, output, session) {
     })
   })
   
+  ## sample_table2 ----
   output$sample_table2 = DT::renderDataTable({
     req(global$sample_corr$genotype)
     
@@ -544,6 +585,7 @@ server <- function(input, output, session) {
     
   })
   
+  ## sample_table ----
   output$sample_table = DT::renderDataTable({
     req(global$sample_corr$genotype)
     out_table <- global$sample_corr %>%
@@ -555,6 +597,7 @@ server <- function(input, output, session) {
     
   })
   
+  ## download_sample_data ----
   output$download_sample_data <- downloadHandler(
     filename <- function() {
       basename(input$download_sample_sel)
@@ -568,9 +611,10 @@ server <- function(input, output, session) {
   
   
   
-  ## table with user-selected column (1 transcript) ----
+  ## FlepTable_single (1 transcript) ----
   output$FlepTable_single  <- renderDataTable(filtereddata_single(),options = list(scrollX = T))
   
+  ## download_FlepTable_single (1 transcript) ----
   output$download_FlepTable_single <- downloadHandler(
     filename = function() {
       # Use the selected dataset as the suggested file name
@@ -582,9 +626,10 @@ server <- function(input, output, session) {
     }
   )
   
-  ## table with user-selected column (multiple transcripts) ----
+  ## FlepTable_list (multiple transcripts) ----
   output$FlepTable_list  <- renderDataTable(filtereddata_list(),options = list(scrollX = T))
   
+  ## download_FlepTable_list (multiple transcripts) ----
   output$download_FlepTable_list <- downloadHandler(
     filename = function() {
       # Use the selected dataset as the suggested file name
@@ -596,7 +641,7 @@ server <- function(input, output, session) {
     }
   )
   
-  ## GTF table ----
+  ## GTFtable_single ----
   output$GTFtable_single <- renderDataTable(
     req(datatable(transcript_data()$GTF_DF %>%
           relocate(transcript)) %>% 
@@ -607,6 +652,7 @@ server <- function(input, output, session) {
     options = list(pageLength = 50)
   )
   
+  ## GTFtable_list ----
   output$GTFtable_list <- renderDataTable(
     req(transcripts_data()$GTF_DF %>%
           relocate(transcript)),
@@ -635,15 +681,13 @@ server <- function(input, output, session) {
       ylab("Mean Coverage")
   })
 
-  ## nreads plot ----
+  ## numgenes plot ----
   output$numgenes <- renderPlot({
     req(input$SubmitRunSel)
-    print(gene_list_data())
     genes_by_sample <- gene_list_data() %>%
       group_by(sample) %>%
       dplyr::summarise(n_genes=n())
     
-
     ggplot(genes_by_sample, aes(x=sample, y=n_genes, fill=sample)) +
       geom_col(position = "dodge", alpha=0.5, color="black") +
         #ggtitle("Number of genes by sample") +
@@ -656,14 +700,13 @@ server <- function(input, output, session) {
 
   })
   
-  
+  ## smpl_reads ----
   output$smpl_reads <- DT::renderDataTable({
     req(input$SubmitRunSel)
     cov <- DT::datatable(MAP_data() %>%
       select(-c("startpos", "endpos", "covbases", "coverage", "meandepth", "meanbaseq", "meanmapq")) %>%
       group_by(sample)%>%
       mutate(tot_read_smpl=sum(numreads)) %>%
-      print() %>%
       pivot_wider(names_from = rname, values_from = numreads) %>%
       
       dplyr::rename(
@@ -729,8 +772,8 @@ server <- function(input, output, session) {
     
 
   })
-  
-  ## # uridylated reads for one transcript ----
+
+  ## uridylated reads for one transcript ----
   output$urid_single <- renderPlot({
     req(transcript_data())
     urid <- plot_urid(transcript_data()$transcript_DF, input$urid_thresh_single)
@@ -738,7 +781,7 @@ server <- function(input, output, session) {
     
   })
   
-  ## # uridylated reads for multiple transcript ----
+  ## uridylated reads for multiple transcript ----
   output$urid_list <- renderPlot({
     req(transcripts_data())
     urid <- plot_urid(transcripts_data()$transcripts_DF, input$urid_thresh_list)
@@ -784,30 +827,33 @@ server <- function(input, output, session) {
     
   })
 
+  ## bulk_polyA_global ----
   output$bulk_polyA_global <- renderImage({
     req(input$SubmitRunSel)
     # Return a list containing the filename
     list(src = global$bulk_polyA_global_f, style="height: 100%")
     }, deleteFile = FALSE)
   
+  ## ig_polyA_global ----
   output$ig_polyA_global <- renderImage({
     req(input$SubmitRunSel)
     list(src=global$ig_polyA_global_f, style="height: 100%")
   }, deleteFile = FALSE)
   
+  ## bulk_ig_global ----
   output$bulk_ig_global <- renderImage({
     req(input$SubmitRunSel)
     #list(src=global$bulk_ig_global_f, width = "100%", height = "700")
     list(src=global$bulk_ig_global_f, style="height: 100%")
   }, deleteFile = FALSE)
   
+  ## cumul_polyA_global ----
   output$cumul_polyA_global <- renderImage({
     req(input$SubmitRunSel)
     # Return a list containing the filename
     list(src = global$cumul_polyA_global_f, style="height: 100%")
   }, deleteFile = FALSE)
 
-  
   
   ## plot reads (intronic profile) ----
   output$plot_reads <- renderPlot({
@@ -817,16 +863,15 @@ server <- function(input, output, session) {
     total_data <- build_intronic_profile_for_plot(filteredintron())
     strand=unique(total_data$df_coords_subgene$strand[!is.na(total_data$df_coords_subgene$strand)])
 
-    print(unique(total_data$df_coords_transcript_subgene_tail$feature))
+    
     total_data$df_coords_transcript_subgene_tail$feature <- factor(total_data$df_coords_transcript_subgene_tail$feature,
                                                                    levels = intronic_prfl_ftrs)
 
-    # plot
     p <- ggplot() +
       geom_rect(data = total_data$df_coords_transcript_subgene_tail,
                 aes(xmin = start, xmax = end, ymin = sample_id , ymax=sample_id +0.5,fill = feature), alpha=.8 ) +
       facet_wrap(~sample, ncol = 1) +
-      theme(strip.background =element_rect(fill="darkgrey"))+
+      #theme(strip.background =element_rect(fill="darkgrey"))+
       theme(strip.text = element_text(colour = 'white')) +
       theme(legend.position="bottom") +
       theme(legend.background = element_rect(linewidth=0.5, linetype="solid")) +
@@ -837,7 +882,8 @@ server <- function(input, output, session) {
       scale_fill_manual(values=intronic_prfl_clrs) +
       ggcustom_theme + 
       theme(axis.ticks.x=element_blank(), 
-            axis.text.y=element_blank()) +
+            axis.text.y=element_blank(),
+            strip.text = element_text(size = 20)) +
       ylab("")
     
     if ( strand=="+") {
@@ -854,52 +900,7 @@ server <- function(input, output, session) {
     return(p)
     
   }, height = 1500)
-  
-  # When a double-click happens, check if there's a brush on the plot.
-  # If so, zoom to the brush bounds; if not, reset the zoom.
-  observeEvent(input$polyaDistr_list_dblclick, {
-    polyaDistr_list_brush <- input$polyaDistr_list_brush
-    if (!is.null(polyaDistr_list_brush)) {
-      ranges$x_polyaDistr_list <- c(polyaDistr_list_brush$xmin, polyaDistr_list_brush$xmax)
-      ranges$y_polyaDistr_list <- c(polyaDistr_list_brush$ymin, polyaDistr_list_brush$ymax)
-      
-    } else {
-      ranges$x_polyaDistr_list <- NULL
-      ranges$y_polyaDistr_list <- NULL
-    }
-  })
-  
-  # When a double-click happens, check if there's a brush on the plot.
-  # If so, zoom to the brush bounds; if not, reset the zoom.
-  observeEvent(input$plot_reads_dblclick, {
-    print("GOT IT")
-    plot_reads_brush <- input$plot_reads_brush
-    if (!is.null(plot_reads_brush)) {
-      ranges$x_plot_reads <- c(plot_reads_brush$xmin, plot_reads_brush$xmax)
-      ranges$y_plot_reads <- c(plot_reads_brush$ymin, plot_reads_brush$ymax)
-      
-    } else {
-      ranges$x_plot_reads <- NULL
-      ranges$y_plot_reads <- NULL
-    }
-    print(ranges$x_plot_reads)
-    print(ranges$y_plot_reads)
-    return(ranges)
-  })
-  
-  # When a double-click happens, check if there's a brush on the plot.
-  # If so, zoom to the brush bounds; if not, reset the zoom.
-  observeEvent(input$polyaDistr_single_dblclick, {
-    polyaDistr_single_brush <- input$polyaDistr_single_brush
-    if (!is.null(polyaDistr_single_brush)) {
-      ranges$x_polyaDistr_single <- c(polyaDistr_single_brush$xmin, polyaDistr_single_brush$xmax)
-      ranges$y_polyaDistr_single <- c(polyaDistr_single_brush$ymin, polyaDistr_single_brush$ymax)
-      
-    } else {
-      ranges$x_polyaDistr_single <- NULL
-      ranges$y_polyaDistr_single <- NULL
-    }
-  })
+ 
  
 } # /server
 

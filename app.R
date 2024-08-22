@@ -64,8 +64,10 @@ body <-
             # plots about run
             tabsetPanel(id = "run_tabsetPanel",
               tabPanel(value = "dl_tabPanel", h5("Download Sample Data"),
+                       h4("Sample Files Overview"),
                        fluidRow(column(dataTableOutput("sample_table"), width=12)),
                        hr(),
+                       h4("Sample Files Download"),
                        em("Full dataset per sample is available for download."),
                        selectizeInput("download_sample_sel", inputId = 'download_sample_sel', label = NULL, choices = NULL, selected = NULL, multiple = FALSE, options = list(create = FALSE)),
                        downloadButton("download_sample_data", "Download")
@@ -74,16 +76,19 @@ body <-
                        h4("Number of reads by sample"),
                        dataTableOutput("smpl_reads"),
                        hr(style = "border-top: 1px solid #000000;"),
-                       h4("Percentage of reads by chromosome"),
+                       h4("Percentage of reads by chromosome")%>% 
+                         helper(icon = "question",
+                                colour = "grey",
+                                type = "markdown",
+                                content = "plot_pctreads"),
                        plotOutput("pctreads"),
                        hr(style = "border-top: 1px solid #000000;"),
-                       h4("Number of detected genes by sample"),
-                       plotOutput("numgenes") %>% 
+                       h4("Number of detected genes by sample")%>% 
                          helper(icon = "question",
                                 colour = "grey",
                                 type = "markdown",
                                 content = "plot_numgenes"),
-                       hr(style = "border-top: 1px solid #000000;")
+                       plotOutput("numgenes") 
                        ),
               tabPanel(h5("Poly(A) Distribution"),
                        #fluidRow(column(imageOutput("bulk_ig_global"), width=12))
@@ -207,6 +212,9 @@ body <-
                      content = "transcripts_sel"),
             tabsetPanel(id="transcripts_tabsetpanel",
               tabPanel(h5("Transcripts Overview"),
+                       br(),
+                       htmlOutput("found_genes_user"),
+                       hr(),
                        dataTableOutput("GTFtable_list")
               ), # /tabpanel
               tabPanel(h5("FLEPseq results"),
@@ -659,6 +667,20 @@ server <- function(input, output, session) {
           relocate(transcript)),
     options = list(pageLength = 50)
   )
+  
+  ## found_genes_user ----
+  output$found_genes_user <- renderUI({
+    req(transcripts_data()$GTF_DF)
+    
+    genes <- unique(transcripts_data()$GTF_DF %>%
+      pull(transcript))
+      
+    x <- paste0("<strong>Genes from input found in annotation</strong>: ", paste(genes, collapse = ", "))
+    HTML(x)
+    
+  })
+    
+
   
   ## coverage plot ----
   output$coverage <- renderPlot({

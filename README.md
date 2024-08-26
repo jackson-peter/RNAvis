@@ -4,8 +4,6 @@
 
 This R/Shiny application has been created to share the results of the FLEPseq2 experiments we performed in our lab and with the scientific community. The version of the FLEPseq2 pipeline has been modified to improve performance (no fastq to fasta conversion), and contains an additional step that allows the detection of other untemolated nucleotide additions after the poly(A) tail, such as uridylation.
 
-- The original FLEPseq2 pipeline: https://github.com/ZhaiLab-SUSTech/FLEPSeq
-- The version used here: https://github.com/jackson-peter/FLEPseq2
 
 
 ## Quick start
@@ -49,6 +47,9 @@ This section allows the user to select multiple genes either from a list (as in 
 ## References 
 Jia, J., Lu, W., Liu, B., Fang, H., Yu, Y., Mo, W., Zhang, H., Jin, X., Shu, Y., Long, Y., Pei, Y., Zhai, J., 2022. An atlas of plant full-length RNA reveals tissue-specific and monocots–dicots conserved regulation of poly(A) tail length. Nat. Plants 8, 1118–1126. https://doi.org/10.1038/s41477-022-01224-9
 
+You can find the code for the pipeline on the following links:
 
+- The original FLEPseq2 pipeline: https://github.com/ZhaiLab-SUSTech/FLEPSeq
+- The version used here (with the additional tail detection): https://github.com/jackson-peter/FLEPseq2
 
 

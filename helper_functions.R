@@ -32,7 +32,7 @@ get_flepruns <- function(datasets_path) {
                !is.na(Run_infos) ~ paste(toupper(Run_name), Run_infos, sep=" :" ),
                TRUE ~ Run_name)) %>%
     mutate(tissue=factor(tissue)) %>% 
-    mutate(tissue=fct_relevel(tissue,c("Developping siliques", "Developping seeds", "Dry mature seeds","Germinating seeds","Flowers"))) %>%
+    mutate(tissue=fct_relevel(tissue,c("Developping siliques", "Developping siliques with seeds and Developping seeds", "Dry mature seeds","Imbibed seeds","Flowers"))) %>%
     arrange(tissue)
   
   return(flep_runs_df)
